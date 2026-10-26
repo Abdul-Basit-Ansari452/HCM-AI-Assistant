@@ -22,7 +22,8 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.ai.agent import build_agent
-from app.ai.leave_parser import build_leave_messages, build_leave_parser
+from app.ai.date_hints import relative_date_hint, resolve_relative_dates
+from app.ai.leave_drafts import draft_leave_from_text
 from app.ai.prompts import ANSWER_SUFFIX
 from app.config import settings
 from app.deps import DbSession, get_current_user, require_roles
@@ -30,7 +31,7 @@ from app.models import User, UserRole
 from app.schemas import (
     AIChatRequest,
     AIChatResponse,
-    LeaveDraft,
+    LeaveDraftResult,
     LeaveParseRequest,
 )
 from app.services.ai_logs import count_recent_calls, create_ai_log
@@ -49,9 +50,8 @@ EmployeeOnly = Annotated[
 ]
 
 
-def _message_text(message: AIMessage) -> str:
+def _content_text(content: Any) -> str:
     """Extract plain text from a LangChain message content payload."""
-    content = message.content
     if isinstance(content, str):
         return content.strip()
     if isinstance(content, list):
@@ -65,6 +65,11 @@ def _message_text(message: AIMessage) -> str:
                     parts.append(text)
         return "\n".join(parts).strip()
     return ""
+
+
+def _message_text(message: AIMessage) -> str:
+    """Extract plain text from an AI message."""
+    return _content_text(message.content)
 
 
 def _extract_answer(messages: list[Any]) -> str:
@@ -100,6 +105,37 @@ def _extract_tools_used(messages: list[Any]) -> list[str]:
             if isinstance(name, str) and name and name not in used:
                 used.append(name)
     return used
+
+
+def _extract_leave_draft(messages: list[Any]) -> LeaveDraftResult | None:
+    """Return the last valid draft produced by draft_leave_request."""
+    for message in reversed(messages):
+        if not isinstance(message, ToolMessage):
+            continue
+
+        name = getattr(message, "name", None)
+        text = _content_text(message.content)
+        if not text:
+            continue
+        try:
+            payload = json.loads(text)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+
+        looks_like_draft = {
+            "draft",
+            "requested_days",
+            "warnings",
+        }.issubset(payload)
+        if name != "draft_leave_request" and not looks_like_draft:
+            continue
+        try:
+            return LeaveDraftResult.model_validate(payload)
+        except ValidationError:
+            continue
+    return None
 
 
 def _with_footer(answer: str) -> str:
@@ -189,10 +225,18 @@ async def chat(
 
     started = perf_counter()
     tools_used: list[str] = []
+    leave_draft: LeaveDraftResult | None = None
     answer = ""
 
     try:
-        agent = build_agent(current_user)
+        today = date.today()
+        resolved_dates = resolve_relative_dates(payload.message, today)
+        date_context = relative_date_hint(payload.message, today)
+        agent = build_agent(
+            current_user,
+            date_context=date_context,
+            resolved_dates=resolved_dates,
+        )
         result = await asyncio.wait_for(
             agent.ainvoke(
                 {"messages": [HumanMessage(content=payload.message)]}
@@ -202,6 +246,7 @@ async def chat(
         messages = result.get("messages", []) if isinstance(result, dict) else []
         answer = _extract_answer(messages)
         tools_used = _extract_tools_used(messages)
+        leave_draft = _extract_leave_draft(messages)
     except TimeoutError:
         answer = "AI is taking too long, please try again."
     except Exception as error:
@@ -222,16 +267,20 @@ async def chat(
         latency_ms=latency_ms,
     )
 
-    return AIChatResponse(answer=answer, tools_used=tools_used)
+    return AIChatResponse(
+        answer=answer,
+        tools_used=tools_used,
+        leave_draft=leave_draft,
+    )
 
 
-@router.post("/leave/parse", response_model=LeaveDraft)
-async def parse_leave_transcript(
+@router.post("/leave/parse", response_model=LeaveDraftResult)
+async def parse_leave_text(
     payload: LeaveParseRequest,
     db: DbSession,
     current_user: EmployeeOnly,
-) -> LeaveDraft:
-    """Turn a spoken transcript into a reviewable leave draft.
+) -> LeaveDraftResult:
+    """Turn a free-text request into a reviewable leave draft.
 
     This endpoint is read-only with respect to leave data: it never creates a
     LeaveRequest. The user must submit the prefilled form manually.
@@ -239,42 +288,35 @@ async def parse_leave_transcript(
     _enforce_rate_limit(db, current_user)
 
     started = perf_counter()
-    draft: LeaveDraft | None = None
+    draft_result: LeaveDraftResult | None = None
     answer = ""
     failure_status = status.HTTP_502_BAD_GATEWAY
 
     try:
-        parser = build_leave_parser()
-        result = await asyncio.wait_for(
-            parser.ainvoke(
-                build_leave_messages(payload.transcript, date.today())
-            ),
+        draft_result = await asyncio.wait_for(
+            draft_leave_from_text(payload.transcript, current_user),
             timeout=_AGENT_TIMEOUT_SECONDS,
         )
-        draft = (
-            result
-            if isinstance(result, LeaveDraft)
-            else LeaveDraft.model_validate(result)
-        )
-        if draft.end_date < draft.start_date:
-            raise ValueError("end_date must be on or after start_date")
     except TimeoutError:
-        draft = None
+        draft_result = None
         answer = "AI is taking too long, please try again."
         failure_status = status.HTTP_504_GATEWAY_TIMEOUT
     except (ValidationError, OutputParserException):
-        draft = None
+        draft_result = None
         answer = (
             "I couldn't understand the leave dates in that request. "
             "Please try again with clear dates."
         )
         failure_status = status.HTTP_422_UNPROCESSABLE_CONTENT
     except ValueError:
-        draft = None
-        answer = "End date must be on or after start date."
+        draft_result = None
+        answer = (
+            "I couldn't build a valid leave draft. "
+            "Please try again with clear dates."
+        )
         failure_status = status.HTTP_422_UNPROCESSABLE_CONTENT
     except Exception as error:
-        draft = None
+        draft_result = None
         if not isinstance(error, OpenAIError):
             logger.warning(
                 "Leave parse failed with %s", type(error).__name__
@@ -283,7 +325,7 @@ async def parse_leave_transcript(
         failure_status = status.HTTP_502_BAD_GATEWAY
 
     latency_ms = max(int((perf_counter() - started) * 1000), 0)
-    if draft is None:
+    if draft_result is None:
         _log_ai_call(
             db,
             user_id=current_user.id,
@@ -298,8 +340,8 @@ async def parse_leave_transcript(
         db,
         user_id=current_user.id,
         question=payload.transcript,
-        answer=draft.model_dump_json(),
+        answer=draft_result.model_dump_json(),
         tools_used=[_LEAVE_PARSE_TOOL],
         latency_ms=latency_ms,
     )
-    return draft
+    return draft_result

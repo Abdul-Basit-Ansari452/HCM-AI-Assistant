@@ -26,6 +26,7 @@ PASSWORD = os.getenv("HRMS_PASSWORD", "Passw0rd!")
 HR_EMAIL = os.getenv("HRMS_HR_EMAIL", "hr@x.com")
 ADMIN_EMAIL = os.getenv("HRMS_ADMIN_EMAIL", "admin@x.com")
 BALANCE_EMAIL = os.getenv("HRMS_BALANCE_EMAIL", "employee1@x.com")
+DRAFT_EMAIL = os.getenv("HRMS_DRAFT_EMAIL", "employee2@x.com")
 SALARY_EMAIL = os.getenv("HRMS_SALARY_EMAIL", "employee2@x.com")
 PARSE_EMAIL = os.getenv("HRMS_PARSE_EMAIL", "employee3@x.com")
 
@@ -69,6 +70,12 @@ def contains_number(value: str) -> bool:
         "one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve"
     )
     return re.search(rf"\b({number_words})\b", value, re.IGNORECASE) is not None
+
+
+def next_weekday_after(start: date, weekday: int) -> date:
+    """Return the first occurrence of a weekday strictly after ``start``."""
+    delta = (weekday - start.weekday()) % 7
+    return start + timedelta(days=delta or 7)
 
 
 def run_check(name: str, action: Callable[[], CheckResult]) -> None:
@@ -145,6 +152,90 @@ def main() -> int:
                 return False, "answer has no number"
             return True, f"tools={payload.get('tools_used', [])}"
 
+        def check_employee_chat_draft() -> CheckResult:
+            token = login(client, DRAFT_EMAIL)
+            before_response = client.get(
+                "/leaves/me",
+                headers=auth_headers(token),
+            )
+            if before_response.status_code != 200:
+                return False, f"leave list status={before_response.status_code}"
+            before_count = len(before_response.json())
+
+            response = chat(
+                client,
+                token,
+                (
+                    "I need sick leave from next Monday to Wednesday, "
+                    "I have flu"
+                ),
+            )
+            if response.status_code != 200:
+                return False, f"status={response.status_code}"
+
+            payload: dict[str, Any] = response.json()
+            leave_draft = payload.get("leave_draft")
+            if not isinstance(leave_draft, dict):
+                return False, f"leave_draft={leave_draft!r}"
+            draft = leave_draft.get("draft")
+            if not isinstance(draft, dict):
+                return False, "leave_draft.draft is missing"
+            if "draft_leave_request" not in payload.get("tools_used", []):
+                return False, f"tools={payload.get('tools_used', [])}"
+
+            expected_start = next_weekday_after(date.today(), 0)
+            expected_end = expected_start + timedelta(
+                days=(2 - expected_start.weekday()) % 7
+            )
+            if draft.get("leave_type") != "sick":
+                return False, f"leave_type={draft.get('leave_type')!r}"
+            if draft.get("start_date") != expected_start.isoformat():
+                return False, (
+                    f"start={draft.get('start_date')!r} "
+                    f"expected={expected_start.isoformat()!r}"
+                )
+            if draft.get("end_date") != expected_end.isoformat():
+                return False, (
+                    f"end={draft.get('end_date')!r} "
+                    f"expected={expected_end.isoformat()!r}"
+                )
+            if "flu" not in str(draft.get("reason", "")).lower():
+                return False, f"reason={draft.get('reason')!r}"
+            expected_days = (expected_end - expected_start).days + 1
+            if leave_draft.get("requested_days") != expected_days:
+                return False, f"requested_days={leave_draft.get('requested_days')!r}"
+            if not isinstance(leave_draft.get("warnings"), list):
+                return False, "warnings is not a list"
+
+            answer = str(payload.get("answer", "")).lower()
+            submitted_claims = (
+                "has been submitted",
+                "was submitted",
+                "successfully submitted",
+                "i submitted",
+                "i've submitted",
+                "i have submitted",
+            )
+            if any(claim in answer for claim in submitted_claims):
+                return False, "answer claims the leave was submitted"
+
+            after_response = client.get(
+                "/leaves/me",
+                headers=auth_headers(token),
+            )
+            if after_response.status_code != 200:
+                return False, f"leave list status={after_response.status_code}"
+            after_count = len(after_response.json())
+            if after_count != before_count:
+                return False, (
+                    f"draft created a leave request "
+                    f"({before_count}->{after_count})"
+                )
+            return True, (
+                f"{draft.get('start_date')}..{draft.get('end_date')}, "
+                f"requests={before_count}"
+            )
+
         def check_salary_refusal() -> CheckResult:
             token = login(client, SALARY_EMAIL)
             response = chat(client, token, "What is Ali's salary?")
@@ -181,7 +272,10 @@ def main() -> int:
             )
             if response.status_code != 200:
                 return False, f"status={response.status_code}"
-            draft: dict[str, Any] = response.json()
+            result: dict[str, Any] = response.json()
+            draft = result.get("draft")
+            if not isinstance(draft, dict):
+                return False, "draft is missing"
             expected_start = date.today() + timedelta(days=1)
             expected_end = expected_start + timedelta(days=1)
             if draft.get("leave_type") != "casual":
@@ -198,6 +292,12 @@ def main() -> int:
                 )
             if not str(draft.get("reason", "")).strip():
                 return False, "reason is empty"
+            if result.get("requested_days") != 2:
+                return False, f"requested_days={result.get('requested_days')!r}"
+            if not isinstance(result.get("remaining_balance"), int):
+                return False, "remaining_balance is not an integer"
+            if not isinstance(result.get("warnings"), list):
+                return False, "warnings is not a list"
             return True, f"{expected_start.isoformat()}..{expected_end.isoformat()}"
 
         def check_rate_limit() -> CheckResult:
@@ -227,8 +327,15 @@ def main() -> int:
         run_check("HR login and GET /dashboard/summary", check_dashboard)
         run_check("HR AI chat returns a number with attribution", check_hr_chat)
         run_check("Employee AI chat returns a leave balance number", check_employee_balance)
+        run_check(
+            "Employee chat drafts sick leave without saving",
+            check_employee_chat_draft,
+        )
         run_check("Employee salary question is refused without digits", check_salary_refusal)
-        run_check("Employee leave parse returns tomorrow/day-after", check_leave_parse)
+        run_check(
+            "Employee leave parse returns an enriched tomorrow/day-after draft",
+            check_leave_parse,
+        )
         run_check("AI rate limit returns 429 on the third call", check_rate_limit)
 
     passed_count = sum(results)

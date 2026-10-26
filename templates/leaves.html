@@ -37,19 +37,14 @@
       <h2>Apply for leave</h2>
       <p class="card-subtitle muted">Dates are inclusive.</p>
     </div>
-    <div id="voice-attach" class="voice-control hidden" data-roles="employee">
-      <button
-        class="btn btn-small"
-        id="voice-button"
-        type="button"
-        aria-describedby="voice-note"
-      >
-        🎤 Speak
-      </button>
-      <p class="voice-note" id="voice-note">AI draft — please review before submitting.</p>
-      <p class="voice-transcript" id="voice-transcript" hidden aria-live="polite"></p>
-    </div>
   </div>
+
+  <div class="leave-tip hidden" id="leave-tip" data-roles="employee">
+    <p>Tip: ask the chat assistant (bottom-right), e.g. 'I need sick leave next Monday to Wednesday', and it will draft this for you.</p>
+    <button class="leave-tip-close" id="leave-tip-close" type="button">Dismiss</button>
+  </div>
+
+  <div id="leave-draft-review" class="leave-draft-review" hidden></div>
 
   <form class="leave-form" id="leave-form">
     <div class="form-grid three-columns">

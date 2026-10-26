@@ -362,33 +362,6 @@ body:not([data-page="login"]) .app-layout {
   font-size: 0.85rem;
 }
 
-.voice-control {
-  display: flex;
-  max-width: 320px;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-  text-align: right;
-}
-
-.voice-note {
-  color: var(--muted);
-  font-size: 0.75rem;
-  line-height: 1.4;
-}
-
-.voice-transcript {
-  width: 100%;
-  padding: 7px 10px;
-  background: var(--surface-subtle);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--heading);
-  font-size: 0.82rem;
-  font-style: italic;
-  line-height: 1.4;
-}
-
 .table-card {
   padding: 0;
   overflow: hidden;
@@ -1555,6 +1528,184 @@ body[data-page="login"] .container {
   line-height: 1.4;
 }
 
+.chat-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: auto;
+  padding: 20px 10px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.chat-manual-link {
+  color: var(--primary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.chat-manual-link:hover {
+  text-decoration: underline;
+}
+
+.draft-card {
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+.chat-draft-card {
+  width: 100%;
+}
+
+.leave-draft-review {
+  margin-bottom: 18px;
+}
+
+.leave-review-card {
+  padding: 16px;
+  background: var(--surface-subtle);
+  box-shadow: none;
+}
+
+.draft-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.draft-card-head h3 {
+  margin-top: 2px;
+  font-size: 0.94rem;
+}
+
+.draft-eyebrow {
+  color: var(--primary);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.draft-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin: 0;
+}
+
+.draft-meta > div {
+  min-width: 0;
+}
+
+.draft-meta-wide {
+  grid-column: 1 / -1;
+}
+
+.draft-meta dt {
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.draft-meta dd {
+  margin: 2px 0 0;
+  color: var(--heading);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.draft-warnings {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+}
+
+.draft-warning {
+  padding: 6px 8px;
+  background: var(--warning-50);
+  border-left: 2px solid var(--warning);
+  border-radius: 4px;
+  color: var(--warning);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.draft-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.chat-draft-card .draft-actions {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.chat-draft-card .draft-actions .btn {
+  width: 100%;
+}
+
+.chat-draft-card .draft-note {
+  text-align: center;
+}
+
+.draft-note {
+  color: var(--muted);
+  font-size: 0.66rem;
+  line-height: 1.4;
+}
+
+.leave-tip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  background: var(--primary-soft);
+  border: 1px solid var(--primary-soft);
+  border-left: 3px solid var(--primary);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.leave-tip p {
+  min-width: 0;
+}
+
+.leave-tip-close {
+  flex: 0 0 auto;
+  padding: 2px 4px;
+  background: transparent;
+  border: 0;
+  color: var(--primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.leave-tip-close:hover {
+  color: var(--primary-hover);
+}
+
 @media (max-width: 767px) {
   .chat-fab {
     right: 16px;
@@ -1729,13 +1880,6 @@ body[data-page="login"] .container {
 
   .card-head {
     flex-wrap: wrap;
-  }
-
-  .voice-control {
-    width: 100%;
-    max-width: none;
-    align-items: flex-start;
-    text-align: left;
   }
 
   .stat-grid {

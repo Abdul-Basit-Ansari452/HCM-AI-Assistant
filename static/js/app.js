@@ -1023,166 +1023,199 @@ function bindLeaveForm(canApprove) {
   });
 }
 
-function initVoicePrefill() {
-  const host = document.getElementById("voice-attach");
-  const button = document.getElementById("voice-button");
-  const transcriptElement = document.getElementById("voice-transcript");
+function fillLeaveFormFromDraft(draft) {
   const leaveType = document.getElementById("leave-type");
   const startInput = document.getElementById("leave-start");
   const endInput = document.getElementById("leave-end");
   const reason = document.getElementById("leave-reason");
   const dateError = document.getElementById("leave-date-error");
-  if (
-    !host ||
-    !button ||
-    !transcriptElement ||
-    !leaveType ||
-    !startInput ||
-    !endInput ||
-    !reason
-  ) {
-    return;
+  if (!leaveType || !startInput || !endInput || !reason || !draft) {
+    return false;
   }
 
-  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const idleLabel = "🎤 Speak";
-  if (!Recognition) {
-    button.disabled = true;
-    button.title = "Voice input needs Chrome/Edge";
-    button.setAttribute("aria-label", "Voice input needs Chrome/Edge");
-    return;
+  leaveType.value = draft.leave_type;
+  startInput.value = draft.start_date;
+  endInput.value = draft.end_date;
+  reason.value = draft.reason;
+  if (dateError) {
+    dateError.hidden = true;
+  }
+  reason.focus();
+  return true;
+}
+
+function buildLeaveDraftCard(leaveDraft, options = {}) {
+  const draft = leaveDraft && leaveDraft.draft;
+  if (!draft) {
+    return null;
   }
 
-  let active = false;
+  const card = document.createElement("section");
+  card.className = "draft-card";
+  if (options.className) {
+    card.classList.add(
+      ...String(options.className).split(" ").filter(Boolean),
+    );
+  }
+  card.setAttribute("aria-label", "AI leave draft");
 
-  const setButtonState = (label, disabled) => {
-    button.textContent = label;
-    button.disabled = disabled;
+  const head = document.createElement("div");
+  head.className = "draft-card-head";
+
+  const heading = document.createElement("div");
+  const eyebrow = document.createElement("p");
+  eyebrow.className = "draft-eyebrow";
+  eyebrow.textContent = "AI leave draft";
+  const title = document.createElement("h3");
+  title.textContent = `${labelize(draft.leave_type)} leave`;
+  heading.append(eyebrow, title);
+
+  const badge = document.createElement("span");
+  badge.className = "badge badge-pending";
+  badge.textContent = "Review";
+  head.append(heading, badge);
+  card.appendChild(head);
+
+  const meta = document.createElement("dl");
+  meta.className = "draft-meta";
+
+  const addMeta = (label, value, wide = false) => {
+    const field = document.createElement("div");
+    if (wide) {
+      field.className = "draft-meta-wide";
+    }
+    const term = document.createElement("dt");
+    term.textContent = label;
+    const detail = document.createElement("dd");
+    detail.textContent = value;
+    field.append(term, detail);
+    meta.appendChild(field);
   };
 
-  const setTranscript = (text) => {
-    const value = String(text || "").trim();
-    transcriptElement.hidden = !value;
-    transcriptElement.textContent = value ? `“${value}”` : "";
-  };
+  addMeta("Dates", formatDateRange(draft.start_date, draft.end_date), true);
+  const days = Number.isFinite(Number(leaveDraft.requested_days))
+    ? Number(leaveDraft.requested_days)
+    : inclusiveDays(draft.start_date, draft.end_date);
+  addMeta("Days", String(days));
 
-  const resetButton = () => {
-    active = false;
-    setButtonState(idleLabel, false);
-  };
+  const remainingValue = Number(leaveDraft.remaining_balance);
+  const remaining = Number.isFinite(remainingValue)
+    ? `${remainingValue} ${labelize(draft.leave_type).toLowerCase()} ${
+        remainingValue === 1 ? "day" : "days"
+      } left`
+    : "Not available";
+  addMeta("Balance", remaining);
+  addMeta("Reason", draft.reason, true);
+  card.appendChild(meta);
 
-  const applyDraft = (draft) => {
-    if (!draft) {
-      return;
-    }
-    leaveType.value = draft.leave_type;
-    startInput.value = draft.start_date;
-    endInput.value = draft.end_date;
-    reason.value = draft.reason;
-    if (dateError) {
-      dateError.hidden = true;
-    }
-    reason.focus();
-    showToast("Voice draft filled. Review it before submitting.", "success");
-  };
-
-  const parseTranscript = async (transcript) => {
-    setButtonState("Parsing…", true);
-    try {
-      const draft = await api("/ai/leave/parse", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript }),
-      });
-      applyDraft(draft);
-    } catch (error) {
-      handleFetchError(error);
-    } finally {
-      resetButton();
-    }
-  };
-
-  button.addEventListener("click", () => {
-    if (active) {
-      return;
-    }
-    active = true;
-    setTranscript("");
-    setButtonState("Listening…", true);
-
-    let recognition;
-    try {
-      recognition = new Recognition();
-    } catch (_error) {
-      showToast("Voice input could not start. Please try again.");
-      resetButton();
-      return;
-    }
-    recognition.lang = navigator.language || "en-US";
-    recognition.interimResults = true;
-    recognition.continuous = false;
-    recognition.maxAlternatives = 1;
-
-    let finalTranscript = "";
-    let previewTranscript = "";
-    let failed = false;
-
-    recognition.onresult = (event) => {
-      let final = "";
-      let interim = "";
-      for (let index = 0; index < event.results.length; index += 1) {
-        const result = event.results[index];
-        const text = result[0]?.transcript || "";
-        if (result.isFinal) {
-          final = `${final} ${text}`.trim();
-        } else {
-          interim = `${interim} ${text}`.trim();
-        }
-      }
-      finalTranscript = final;
-      previewTranscript = `${final} ${interim}`.trim();
-      setTranscript(previewTranscript);
-    };
-
-    recognition.onerror = (event) => {
-      failed = true;
-      active = false;
-      const messages = {
-        "not-allowed":
-          "Microphone access was denied. Allow microphone access and try again.",
-        "service-not-allowed":
-          "Speech recognition is not available in this browser.",
-        "no-speech": "I didn't hear anything. Please try again.",
-        "audio-capture": "No microphone was found.",
-        network: "Speech recognition is unavailable right now.",
-      };
-      showToast(
-        messages[event.error] || "Voice input failed. Please try again.",
+  const warnings = Array.isArray(leaveDraft.warnings)
+    ? leaveDraft.warnings
+    : [];
+  if (warnings.length > 0) {
+    const warningList = document.createElement("div");
+    warningList.className = "draft-warnings";
+    warnings.forEach((warning) => {
+      const row = document.createElement("p");
+      row.className = "draft-warning";
+      row.textContent = String(
+        warning?.message || warning || "Review this draft.",
       );
-      resetButton();
-    };
+      warningList.appendChild(row);
+    });
+    card.appendChild(warningList);
+  }
 
-    recognition.onend = () => {
-      if (failed) {
-        resetButton();
-        return;
-      }
-      const transcript = (finalTranscript || previewTranscript).trim();
-      if (!transcript) {
-        showToast("I didn't catch that. Please try again.");
-        resetButton();
-        return;
-      }
-      setTranscript(transcript);
-      parseTranscript(transcript);
-    };
-
-    try {
-      recognition.start();
-    } catch (_error) {
-      showToast("Voice input could not start. Please try again.");
-      resetButton();
+  const actions = document.createElement("div");
+  actions.className = "draft-actions";
+  const button = document.createElement("button");
+  button.className = "btn btn-primary btn-small";
+  button.type = "button";
+  button.textContent = options.buttonLabel || "Apply to form";
+  button.addEventListener("click", () => {
+    if (typeof options.onApply === "function") {
+      options.onApply(leaveDraft);
     }
+  });
+  actions.appendChild(button);
+
+  const note = document.createElement("p");
+  note.className = "draft-note";
+  note.textContent = "Nothing is submitted until you click Submit.";
+  actions.appendChild(note);
+  card.appendChild(actions);
+
+  return card;
+}
+
+function storeLeaveDraftForForm(leaveDraft) {
+  try {
+    sessionStorage.setItem("leave_draft", JSON.stringify(leaveDraft));
+  } catch (_error) {
+    showToast(
+      "Could not save the draft in this browser. Use the form instead.",
+    );
+    return;
+  }
+  window.location.assign("/leave");
+}
+
+function initLeaveDraftReview() {
+  const host = document.getElementById("leave-draft-review");
+  if (!host) {
+    return;
+  }
+
+  let raw = null;
+  try {
+    raw = sessionStorage.getItem("leave_draft");
+  } catch (_error) {
+    return;
+  }
+  if (!raw) {
+    return;
+  }
+  try {
+    sessionStorage.removeItem("leave_draft");
+  } catch (_error) {
+    // The in-memory draft below is still usable for this page load.
+  }
+
+  let leaveDraft = null;
+  try {
+    leaveDraft = JSON.parse(raw);
+  } catch (_error) {
+    return;
+  }
+  if (!leaveDraft || !leaveDraft.draft) {
+    return;
+  }
+
+  const card = buildLeaveDraftCard(leaveDraft, {
+    buttonLabel: "Apply to form",
+    className: "leave-review-card",
+    onApply: (draftEnvelope) => {
+      if (fillLeaveFormFromDraft(draftEnvelope.draft)) {
+        host.hidden = true;
+        host.replaceChildren();
+        showToast("Draft applied. Review the form and submit.", "success");
+      }
+    },
+  });
+  if (!card) {
+    return;
+  }
+  host.replaceChildren(card);
+  host.hidden = false;
+}
+
+function initLeaveTip() {
+  const tip = document.getElementById("leave-tip");
+  const close = document.getElementById("leave-tip-close");
+  if (!tip || !close) {
+    return;
+  }
+  close.addEventListener("click", () => {
+    tip.hidden = true;
   });
 }
 
@@ -1239,8 +1272,15 @@ async function initLeavesPage(user) {
   const canApprove = isAdminOrHr(user);
   bindLeaveForm(canApprove);
   if (user.role === "employee") {
-    initVoicePrefill();
+    initLeaveDraftReview();
+  } else {
+    try {
+      sessionStorage.removeItem("leave_draft");
+    } catch (_error) {
+      // Storage can be unavailable in hardened browser modes.
+    }
   }
+  initLeaveTip();
   if (canApprove) {
     bindPendingActions();
   }
@@ -1257,6 +1297,7 @@ function initChatWidget(user) {
   const panel = document.getElementById("chat-widget-panel");
   const closeButton = document.getElementById("chat-widget-close");
   const messagesElement = document.getElementById("chat-widget-messages");
+  const emptyState = document.getElementById("chat-widget-empty");
   const examplesElement = document.getElementById("chat-widget-examples");
   const form = document.getElementById("chat-widget-form");
   const input = document.getElementById("chat-widget-input");
@@ -1328,6 +1369,10 @@ function initChatWidget(user) {
   }
 
   function addUserMessage(text) {
+    if (emptyState) {
+      emptyState.hidden = true;
+    }
+
     const wrapper = document.createElement("div");
     wrapper.className = "chat-message chat-message-user";
 
@@ -1341,7 +1386,7 @@ function initChatWidget(user) {
     scrollToBottom();
   }
 
-  function addAssistantMessage(answer, toolsUsed) {
+  function addAssistantMessage(answer, toolsUsed, leaveDraft) {
     const text = String(answer ?? "").trim();
     const body = text.endsWith(CHAT_ANSWER_SUFFIX)
       ? text.slice(0, -CHAT_ANSWER_SUFFIX.length).trimEnd()
@@ -1387,8 +1432,25 @@ function initChatWidget(user) {
     }
 
     wrapper.appendChild(badgeRow);
+
+    if (leaveDraft) {
+      const draftCard = buildLeaveDraftCard(leaveDraft, {
+        buttonLabel: "Apply draft to form",
+        className: "chat-draft-card",
+        onApply: storeLeaveDraftForForm,
+      });
+      if (draftCard) {
+        wrapper.appendChild(draftCard);
+      }
+    }
+
     messagesElement.appendChild(wrapper);
-    chatHistory.push({ role: "assistant", text: body, tools });
+    chatHistory.push({
+      role: "assistant",
+      text: body,
+      tools,
+      leaveDraft: leaveDraft || null,
+    });
     scrollToBottom();
   }
 
@@ -1475,7 +1537,11 @@ function initChatWidget(user) {
         body: JSON.stringify({ message }),
       });
       removeLoading();
-      addAssistantMessage(response?.answer ?? "", response?.tools_used ?? []);
+      addAssistantMessage(
+        response?.answer ?? "",
+        response?.tools_used ?? [],
+        response?.leave_draft ?? null,
+      );
     } catch (error) {
       removeLoading();
       if (error instanceof ApiError && error.status === 401) {

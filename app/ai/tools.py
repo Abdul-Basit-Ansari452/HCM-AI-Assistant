@@ -9,10 +9,14 @@ from __future__ import annotations
 
 import json
 from datetime import date as Date
+from typing import Literal
 
 from langchain_core.tools import BaseTool, tool
+from pydantic import ValidationError
 
+from app.ai.leave_drafts import enrich_leave_draft
 from app.models import User, UserRole
+from app.schemas import LeaveDraft
 from app.services.attendance import attendance_summary as get_attendance_summary
 from app.services.employees import count_employees
 from app.services.leaves import (
@@ -24,6 +28,7 @@ from app.services.policies import search_policies
 _HR_ROLES = frozenset({UserRole.ADMIN, UserRole.HR})
 _ALL_ROLES = frozenset(UserRole)
 _FORBIDDEN = "forbidden: this tool is restricted to HR and admin users."
+_FORBIDDEN_EMPLOYEE = "forbidden: this tool is restricted to employees."
 
 
 def _json(data: object) -> str:
@@ -31,10 +36,15 @@ def _json(data: object) -> str:
     return json.dumps(data, ensure_ascii=False, default=str)
 
 
-def make_tools_for_user(user: User) -> list[BaseTool]:
+def make_tools_for_user(
+    user: User,
+    *,
+    resolved_dates: tuple[Date | None, Date | None] = (None, None),
+) -> list[BaseTool]:
     """Build the tool list for one user, capturing identity in closures."""
     role = user.role
     employee_id = user.employee_id
+    resolved_start, resolved_end = resolved_dates
 
     @tool
     def headcount(department: str | None = None) -> str:
@@ -98,6 +108,47 @@ def make_tools_for_user(user: User) -> list[BaseTool]:
         )
 
     @tool
+    def draft_leave_request(
+        leave_type: Literal["sick", "casual", "earned"],
+        start_date: str,
+        end_date: str,
+        reason: str,
+    ) -> str:
+        """Draft a leave request for human review. Never saves or submits it."""
+        if role != UserRole.EMPLOYEE:
+            return _FORBIDDEN_EMPLOYEE
+        if employee_id is None:
+            return _json(
+                {"error": "No linked employee record is available for this user."}
+            )
+        if resolved_start is not None:
+            start_date = resolved_start.isoformat()
+        if resolved_end is not None:
+            end_date = resolved_end.isoformat()
+
+        try:
+            draft = LeaveDraft.model_validate(
+                {
+                    "leave_type": leave_type,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "reason": reason,
+                }
+            )
+        except ValidationError:
+            return _json(
+                {
+                    "error": (
+                        "Invalid leave draft. Use leave_type sick, casual, or "
+                        "earned; ISO dates (YYYY-MM-DD); and an end date on or "
+                        "after the start date."
+                    )
+                }
+            )
+
+        return _json(enrich_leave_draft(draft, user).model_dump(mode="json"))
+
+    @tool
     def my_leave_balance() -> str:
         """Return only the calling user's own leave balances."""
         if role not in _ALL_ROLES:
@@ -127,5 +178,7 @@ def make_tools_for_user(user: User) -> list[BaseTool]:
     tools: list[BaseTool] = []
     if role in _HR_ROLES:
         tools.extend([headcount, attendance_summary, pending_leave_count])
+    if role == UserRole.EMPLOYEE:
+        tools.append(draft_leave_request)
     tools.extend([my_leave_balance, policy_lookup])
     return tools

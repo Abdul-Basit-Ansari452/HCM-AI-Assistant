@@ -155,6 +155,24 @@ class LeaveDraft(BaseModel):
         return self
 
 
+class LeaveDraftWarning(BaseModel):
+    """A non-blocking issue shown alongside an AI leave draft."""
+
+    code: Literal["insufficient_balance", "overlap", "past_date"]
+    message: str
+    other_leave_types: list[str] = Field(default_factory=list)
+    request_ids: list[int] = Field(default_factory=list)
+
+
+class LeaveDraftResult(BaseModel):
+    """A reviewable leave draft with read-only enrichment."""
+
+    draft: LeaveDraft
+    requested_days: int
+    remaining_balance: int
+    warnings: list[LeaveDraftWarning] = Field(default_factory=list)
+
+
 class LeaveResponse(ORMModel):
     """Safe public representation of a leave request."""
 
@@ -227,21 +245,22 @@ class AIChatRequest(BaseModel):
 
 
 class AIChatResponse(BaseModel):
-    """Answer and the tools actually invoked for it."""
+    """Answer, tools invoked, and an optional reviewable leave draft."""
 
     answer: str
     tools_used: list[str] = Field(default_factory=list)
+    leave_draft: LeaveDraftResult | None = None
 
 
 class LeaveParseRequest(BaseModel):
-    """Spoken transcript to turn into a leave draft."""
+    """Free-text request to turn into a leave draft."""
 
     transcript: str = Field(min_length=1, max_length=2000)
 
     @field_validator("transcript")
     @classmethod
     def validate_transcript(cls, value: str) -> str:
-        """Reject whitespace-only transcripts."""
+        """Reject whitespace-only requests."""
         value = value.strip()
         if not value:
             raise ValueError("transcript must not be empty")

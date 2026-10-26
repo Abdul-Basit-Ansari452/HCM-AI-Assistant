@@ -2,7 +2,7 @@
 
 A small HR management app built with FastAPI, SQLite, Jinja2, and a read-only
 LangGraph AI assistant. It covers authentication, employees, attendance, leave,
-policy Q&A, a floating AI chat widget, and voice-assisted leave drafting.
+policy Q&A, a floating AI chat widget, and reviewable AI leave drafting.
 
 ## Features
 
@@ -13,15 +13,20 @@ policy Q&A, a floating AI chat widget, and voice-assisted leave drafting.
 - Employee directory with admin/HR create and edit flows.
 - Attendance history with check-in/check-out actions and daily summaries.
 - Leave balances, self-service leave requests, and admin/HR approvals.
+- Manual leave form that is always available and has no AI dependency.
 - Floating AI assistant on every authenticated page:
   - role-aware example questions;
   - tool-usage badges on every answer;
   - visible `— AI-generated answer` attribution;
   - hourly quota handling and friendly error messages;
   - in-memory conversation history only (cleared on page load).
+- Chat-driven leave drafting for employees:
+  - ask the assistant for leave in natural language and it prepares a draft;
+  - the chat shows type, dates, days, reason, and balance/overlap warnings;
+  - `Apply draft to form` stores the draft and opens `/leave`;
+  - the leave page shows a review card and `Apply to form` fills the inputs;
+  - nothing is submitted until the user clicks `Submit request`.
 - Grounded policy Q&A, including work-from-home, leave, and attendance policies.
-- Voice-to-prefill leave drafting for employees in Chrome/Edge. The AI creates a
-  reviewable draft and never submits it automatically.
 
 ## Stack
 
@@ -148,6 +153,9 @@ All seeded accounts use the password `Passw0rd!`.
 - Admin/HR-only tools: `headcount`, `attendance_summary`,
   `pending_leave_count`. These are omitted entirely for employees.
 - Any-user tools: `my_leave_balance`, `policy_lookup`.
+- Employee-only tool: `draft_leave_request`. It validates the parsed draft,
+  enriches it with the employee's own balance and existing requests, and returns
+  JSON. It never writes a `LeaveRequest`.
 - Salary and compensation questions are refused. Salary data is never exposed
   to a tool.
 - Answers must be grounded in tool results. The model is instructed not to
@@ -160,8 +168,14 @@ All seeded accounts use the password `Passw0rd!`.
   messages.
 - Exactly one `AILog` row is written for each executed AI call. Rate-limited
   calls are rejected before any AI work and are not logged.
-- The leave parser is employee-only, returns only a validated draft, and never
-  creates a `LeaveRequest`.
+- `POST /ai/leave/parse` is employee-only. It returns
+  `{draft, requested_days, remaining_balance, warnings}`, never creates a
+  `LeaveRequest`, and is enriched with insufficient-balance, overlap, and
+  past-date warnings from existing read-only services.
+- `POST /ai/chat` includes `leave_draft` only when the employee's run invoked
+  `draft_leave_request`; otherwise it is `null`.
+- The leave form is the only submit path. AI drafting is advisory and requires
+  human review.
 
 ## Smoke test
 
@@ -204,7 +218,7 @@ python smoke_test.py
 Expected output ends with:
 
 ```text
-7/7 checks passed.
+8/8 checks passed.
 ```
 
 Checks cover:
@@ -213,13 +227,16 @@ Checks cover:
 2. HR login and `GET /dashboard/summary` return `200`.
 3. HR AI chat returns a number with `AI-generated` attribution.
 4. Employee AI chat returns a sick-leave balance number.
-5. Employee salary question is refused and contains no digits.
-6. Employee leave parse returns tomorrow and the day after.
-7. The third AI request returns `429` with a limit of 2.
+5. Employee chat drafts sick leave for the correct dates and creates zero
+   `LeaveRequest` rows.
+6. Employee salary question is refused and contains no digits.
+7. Employee leave parse returns an enriched tomorrow/day-after draft.
+8. The third AI request returns `429` with a limit of 2.
 
 The rate-limit check uses `admin@x.com`, so run the smoke test against a fresh
 seed (or before that account has made recent AI calls). The script never burns
-20 calls to discover the limit: it attempts at most three.
+20 calls to discover the limit: it attempts at most three. The draft and salary
+checks share `employee2@x.com`, so each stays within the limit-2 quota.
 
 ## Project layout
 
@@ -234,10 +251,10 @@ app/
   security.py      # password and JWT helpers
   routers/         # HTTP routes
   services/        # business logic and database access
-  ai/              # LangGraph agent, tools, prompts, leave parser
+  ai/              # LangGraph agent, tools, prompts, text leave drafting
 templates/         # Jinja2 pages and shared layout
 static/css/        # design tokens and responsive styles
-static/js/         # page behavior, AI chat widget, voice UI
+static/js/         # page behavior, AI chat widget, leave draft review
 seed.py            # local development data
 smoke_test.py      # live-server acceptance checks
 requirements.txt
@@ -246,9 +263,9 @@ requirements.txt
 
 ## Notes
 
-- Voice input requires Chrome or Edge with microphone permission. Unsupported
-  browsers show a disabled button with the tooltip `Voice input needs Chrome/Edge`.
-- AI answers are generated from HR data and policies. Users should review
-  voice-drafted leave before submitting.
+- The manual leave form works without the AI assistant. AI leave drafting is
+  advisory, read-only, and always requires a human review and manual submit.
+- AI answers and drafts are generated from HR data and policies. Users should
+  review drafts before submitting.
 - The app is an MVP: it intentionally has no Docker, migrations, or background
   job system.

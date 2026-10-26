@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from langchain_openai import ChatOpenAI
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import create_react_agent
@@ -14,7 +16,12 @@ from app.models import User
 MODEL_NAME = "gpt-4o-mini"
 
 
-def build_agent(user: User) -> CompiledStateGraph:
+def build_agent(
+    user: User,
+    *,
+    date_context: str = "",
+    resolved_dates: tuple[date | None, date | None] = (None, None),
+) -> CompiledStateGraph:
     """Build a fresh role-scoped ReAct agent for one request."""
     model = ChatOpenAI(
         model=MODEL_NAME,
@@ -25,6 +32,6 @@ def build_agent(user: User) -> CompiledStateGraph:
     )
     return create_react_agent(
         model=model,
-        tools=make_tools_for_user(user),
-        prompt=build_system_prompt(user),
+        tools=make_tools_for_user(user, resolved_dates=resolved_dates),
+        prompt=build_system_prompt(user, date_context=date_context),
     )

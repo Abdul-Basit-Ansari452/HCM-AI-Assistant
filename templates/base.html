@@ -124,7 +124,12 @@
           id="chat-widget-messages"
           aria-live="polite"
           aria-relevant="additions"
-        ></div>
+        >
+          <div class="chat-empty" id="chat-widget-empty">
+            <p>Ask about leave, balances, attendance, or policies.</p>
+            <a class="chat-manual-link" href="/leave">Apply manually &rarr;</a>
+          </div>
+        </div>
         <div
           class="chat-examples"
           id="chat-widget-examples"
@@ -136,7 +141,7 @@
             id="chat-widget-input"
             rows="1"
             maxlength="2000"
-            placeholder="Ask about HR data or policies..."
+            placeholder="Ask about leave, balances, or policies..."
             required
           ></textarea>
           <button
@@ -147,7 +152,7 @@
             Send
           </button>
         </form>
-        <p class="chat-note">Answers are generated from your HR data. Review before acting.</p>
+        <p class="chat-note">Answers and drafts are generated from your HR data. Review before acting.</p>
       </section>
     </div>
     <script src="{{ url_for('static', path='js/app.js') }}" defer></script>

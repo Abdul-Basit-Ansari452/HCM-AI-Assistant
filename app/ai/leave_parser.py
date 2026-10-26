@@ -1,4 +1,4 @@
-"""Structured leave-draft extraction for voice input."""
+"""Structured leave-draft extraction from free text."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
 from langchain_openai import ChatOpenAI
 
+from app.ai.date_hints import next_weekday_reference, relative_date_hint
 from app.config import settings
 from app.schemas import LeaveDraft
 
@@ -32,11 +33,16 @@ def build_leave_messages(
     today: date,
 ) -> list[SystemMessage | HumanMessage]:
     """Build the extraction prompt with an explicit reference date."""
-    system_prompt = f"""You extract a leave request draft from a spoken transcript.
+    system_prompt = f"""You extract a leave request draft from a free-text request.
 You are read-only: do not create, approve, reject, save, or submit anything.
 
 Today's date is {today.isoformat()} ({today.strftime("%A")}). Resolve every
 relative date from that reference date.
+
+Next-weekday reference (use these exact ISO dates; do not recalculate them):
+{next_weekday_reference(today)}
+
+{relative_date_hint(transcript, today)}
 
 Rules:
 - leave_type must be exactly one of: sick, casual, earned. If it is not stated,
