@@ -1,7 +1,7 @@
 """Pydantic v2 schemas shared across routes."""
 
 from datetime import date, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import (
     AfterValidator,
@@ -140,6 +140,21 @@ class LeaveCreate(BaseModel):
         return self
 
 
+class LeaveDraft(BaseModel):
+    """AI-extracted leave draft that is never submitted automatically."""
+
+    leave_type: Literal["sick", "casual", "earned"]
+    start_date: date
+    end_date: date
+    reason: str = Field(min_length=1, max_length=1000)
+
+    @model_validator(mode="after")
+    def validate_date_range(self) -> "LeaveDraft":
+        if self.end_date < self.start_date:
+            raise ValueError("end_date must be on or after start_date")
+        return self
+
+
 class LeaveResponse(ORMModel):
     """Safe public representation of a leave request."""
 
@@ -216,3 +231,18 @@ class AIChatResponse(BaseModel):
 
     answer: str
     tools_used: list[str] = Field(default_factory=list)
+
+
+class LeaveParseRequest(BaseModel):
+    """Spoken transcript to turn into a leave draft."""
+
+    transcript: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("transcript")
+    @classmethod
+    def validate_transcript(cls, value: str) -> str:
+        """Reject whitespace-only transcripts."""
+        value = value.strip()
+        if not value:
+            raise ValueError("transcript must not be empty")
+        return value

@@ -362,6 +362,33 @@ body:not([data-page="login"]) .app-layout {
   font-size: 0.85rem;
 }
 
+.voice-control {
+  display: flex;
+  max-width: 320px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  text-align: right;
+}
+
+.voice-note {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.voice-transcript {
+  width: 100%;
+  padding: 7px 10px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--heading);
+  font-size: 0.82rem;
+  font-style: italic;
+  line-height: 1.4;
+}
+
 .table-card {
   padding: 0;
   overflow: hidden;
@@ -1352,6 +1379,17 @@ body[data-page="login"] .container {
   .page-actions .select {
     min-width: 0;
     flex: 1;
+  }
+
+  .card-head {
+    flex-wrap: wrap;
+  }
+
+  .voice-control {
+    width: 100%;
+    max-width: none;
+    align-items: flex-start;
+    text-align: left;
   }
 
   .stat-grid {

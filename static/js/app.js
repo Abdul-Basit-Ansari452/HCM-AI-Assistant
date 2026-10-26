@@ -1022,6 +1022,169 @@ function bindLeaveForm(canApprove) {
   });
 }
 
+function initVoicePrefill() {
+  const host = document.getElementById("voice-attach");
+  const button = document.getElementById("voice-button");
+  const transcriptElement = document.getElementById("voice-transcript");
+  const leaveType = document.getElementById("leave-type");
+  const startInput = document.getElementById("leave-start");
+  const endInput = document.getElementById("leave-end");
+  const reason = document.getElementById("leave-reason");
+  const dateError = document.getElementById("leave-date-error");
+  if (
+    !host ||
+    !button ||
+    !transcriptElement ||
+    !leaveType ||
+    !startInput ||
+    !endInput ||
+    !reason
+  ) {
+    return;
+  }
+
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const idleLabel = "🎤 Speak";
+  if (!Recognition) {
+    button.disabled = true;
+    button.title = "Voice input needs Chrome/Edge";
+    button.setAttribute("aria-label", "Voice input needs Chrome/Edge");
+    return;
+  }
+
+  let active = false;
+
+  const setButtonState = (label, disabled) => {
+    button.textContent = label;
+    button.disabled = disabled;
+  };
+
+  const setTranscript = (text) => {
+    const value = String(text || "").trim();
+    transcriptElement.hidden = !value;
+    transcriptElement.textContent = value ? `“${value}”` : "";
+  };
+
+  const resetButton = () => {
+    active = false;
+    setButtonState(idleLabel, false);
+  };
+
+  const applyDraft = (draft) => {
+    if (!draft) {
+      return;
+    }
+    leaveType.value = draft.leave_type;
+    startInput.value = draft.start_date;
+    endInput.value = draft.end_date;
+    reason.value = draft.reason;
+    if (dateError) {
+      dateError.hidden = true;
+    }
+    reason.focus();
+    showToast("Voice draft filled. Review it before submitting.", "success");
+  };
+
+  const parseTranscript = async (transcript) => {
+    setButtonState("Parsing…", true);
+    try {
+      const draft = await api("/ai/leave/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transcript }),
+      });
+      applyDraft(draft);
+    } catch (error) {
+      handleFetchError(error);
+    } finally {
+      resetButton();
+    }
+  };
+
+  button.addEventListener("click", () => {
+    if (active) {
+      return;
+    }
+    active = true;
+    setTranscript("");
+    setButtonState("Listening…", true);
+
+    let recognition;
+    try {
+      recognition = new Recognition();
+    } catch (_error) {
+      showToast("Voice input could not start. Please try again.");
+      resetButton();
+      return;
+    }
+    recognition.lang = navigator.language || "en-US";
+    recognition.interimResults = true;
+    recognition.continuous = false;
+    recognition.maxAlternatives = 1;
+
+    let finalTranscript = "";
+    let previewTranscript = "";
+    let failed = false;
+
+    recognition.onresult = (event) => {
+      let final = "";
+      let interim = "";
+      for (let index = 0; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        const text = result[0]?.transcript || "";
+        if (result.isFinal) {
+          final = `${final} ${text}`.trim();
+        } else {
+          interim = `${interim} ${text}`.trim();
+        }
+      }
+      finalTranscript = final;
+      previewTranscript = `${final} ${interim}`.trim();
+      setTranscript(previewTranscript);
+    };
+
+    recognition.onerror = (event) => {
+      failed = true;
+      active = false;
+      const messages = {
+        "not-allowed":
+          "Microphone access was denied. Allow microphone access and try again.",
+        "service-not-allowed":
+          "Speech recognition is not available in this browser.",
+        "no-speech": "I didn't hear anything. Please try again.",
+        "audio-capture": "No microphone was found.",
+        network: "Speech recognition is unavailable right now.",
+      };
+      showToast(
+        messages[event.error] || "Voice input failed. Please try again.",
+      );
+      resetButton();
+    };
+
+    recognition.onend = () => {
+      if (failed) {
+        resetButton();
+        return;
+      }
+      const transcript = (finalTranscript || previewTranscript).trim();
+      if (!transcript) {
+        showToast("I didn't catch that. Please try again.");
+        resetButton();
+        return;
+      }
+      setTranscript(transcript);
+      parseTranscript(transcript);
+    };
+
+    try {
+      recognition.start();
+    } catch (_error) {
+      showToast("Voice input could not start. Please try again.");
+      resetButton();
+    }
+  });
+}
+
 function bindPendingActions() {
   const tbody = document.getElementById("pending-leaves-body");
   if (!tbody) {
@@ -1074,6 +1237,9 @@ function bindPendingActions() {
 async function initLeavesPage(user) {
   const canApprove = isAdminOrHr(user);
   bindLeaveForm(canApprove);
+  if (user.role === "employee") {
+    initVoicePrefill();
+  }
   if (canApprove) {
     bindPendingActions();
   }

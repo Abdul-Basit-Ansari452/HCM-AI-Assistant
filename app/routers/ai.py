@@ -5,11 +5,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from time import perf_counter
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from openai import (
     APIConnectionError,
@@ -17,12 +18,20 @@ from openai import (
     OpenAIError,
     RateLimitError,
 )
+from pydantic import ValidationError
+from sqlalchemy.orm import Session
 
 from app.ai.agent import build_agent
+from app.ai.leave_parser import build_leave_messages, build_leave_parser
 from app.ai.prompts import ANSWER_SUFFIX
-from app.deps import DbSession, get_current_user
-from app.models import User
-from app.schemas import AIChatRequest, AIChatResponse
+from app.deps import DbSession, get_current_user, require_roles
+from app.models import User, UserRole
+from app.schemas import (
+    AIChatRequest,
+    AIChatResponse,
+    LeaveDraft,
+    LeaveParseRequest,
+)
 from app.services.ai_logs import count_recent_calls, create_ai_log
 
 logger = logging.getLogger(__name__)
@@ -31,6 +40,12 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 
 _HOURLY_LIMIT = 20
 _AGENT_TIMEOUT_SECONDS = 15
+_LEAVE_PARSE_TOOL = "leave_parse"
+
+EmployeeOnly = Annotated[
+    User,
+    Depends(require_roles(UserRole.EMPLOYEE)),
+]
 
 
 def _message_text(message: AIMessage) -> str:
@@ -118,17 +133,12 @@ def _friendly_error_message(error: Exception) -> str:
     return "The AI assistant is temporarily unavailable. Please try again."
 
 
-@router.post("/chat", response_model=AIChatResponse)
-async def chat(
-    payload: AIChatRequest,
-    db: DbSession,
-    current_user: Annotated[User, Depends(get_current_user)],
-) -> AIChatResponse:
-    """Answer one read-only HR question for the authenticated user."""
+def _enforce_rate_limit(db: Session, user: User) -> None:
+    """Raise 429 when the user has used the shared hourly AI quota."""
     cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=1)
     recent_calls = count_recent_calls(
         db,
-        user_id=current_user.id,
+        user_id=user.id,
         since=cutoff,
     )
     if recent_calls >= _HOURLY_LIMIT:
@@ -136,6 +146,36 @@ async def chat(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Hourly AI limit reached (20/hour).",
         )
+
+
+def _log_ai_call(
+    db: Session,
+    *,
+    user_id: int,
+    question: str,
+    answer: str,
+    tools_used: list[str],
+    latency_ms: int,
+) -> None:
+    """Persist one AI call through the service layer."""
+    create_ai_log(
+        db,
+        user_id=user_id,
+        question=question,
+        answer=answer,
+        tools_used=json.dumps(tools_used),
+        latency_ms=latency_ms,
+    )
+
+
+@router.post("/chat", response_model=AIChatResponse)
+async def chat(
+    payload: AIChatRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> AIChatResponse:
+    """Answer one read-only HR question for the authenticated user."""
+    _enforce_rate_limit(db, current_user)
 
     started = perf_counter()
     tools_used: list[str] = []
@@ -163,13 +203,93 @@ async def chat(
 
     answer = _with_footer(answer)
     latency_ms = max(int((perf_counter() - started) * 1000), 0)
-    create_ai_log(
+    _log_ai_call(
         db,
         user_id=current_user.id,
         question=payload.message,
         answer=answer,
-        tools_used=json.dumps(tools_used),
+        tools_used=tools_used,
         latency_ms=latency_ms,
     )
 
     return AIChatResponse(answer=answer, tools_used=tools_used)
+
+
+@router.post("/leave/parse", response_model=LeaveDraft)
+async def parse_leave_transcript(
+    payload: LeaveParseRequest,
+    db: DbSession,
+    current_user: EmployeeOnly,
+) -> LeaveDraft:
+    """Turn a spoken transcript into a reviewable leave draft.
+
+    This endpoint is read-only with respect to leave data: it never creates a
+    LeaveRequest. The user must submit the prefilled form manually.
+    """
+    _enforce_rate_limit(db, current_user)
+
+    started = perf_counter()
+    draft: LeaveDraft | None = None
+    answer = ""
+    failure_status = status.HTTP_502_BAD_GATEWAY
+
+    try:
+        parser = build_leave_parser()
+        result = await asyncio.wait_for(
+            parser.ainvoke(
+                build_leave_messages(payload.transcript, date.today())
+            ),
+            timeout=_AGENT_TIMEOUT_SECONDS,
+        )
+        draft = (
+            result
+            if isinstance(result, LeaveDraft)
+            else LeaveDraft.model_validate(result)
+        )
+        if draft.end_date < draft.start_date:
+            raise ValueError("end_date must be on or after start_date")
+    except TimeoutError:
+        draft = None
+        answer = "AI is taking too long, please try again."
+        failure_status = status.HTTP_504_GATEWAY_TIMEOUT
+    except (ValidationError, OutputParserException):
+        draft = None
+        answer = (
+            "I couldn't understand the leave dates in that request. "
+            "Please try again with clear dates."
+        )
+        failure_status = status.HTTP_422_UNPROCESSABLE_CONTENT
+    except ValueError:
+        draft = None
+        answer = "End date must be on or after start date."
+        failure_status = status.HTTP_422_UNPROCESSABLE_CONTENT
+    except Exception as error:
+        draft = None
+        if not isinstance(error, OpenAIError):
+            logger.warning(
+                "Leave parse failed with %s", type(error).__name__
+            )
+        answer = _friendly_error_message(error)
+        failure_status = status.HTTP_502_BAD_GATEWAY
+
+    latency_ms = max(int((perf_counter() - started) * 1000), 0)
+    if draft is None:
+        _log_ai_call(
+            db,
+            user_id=current_user.id,
+            question=payload.transcript,
+            answer=answer,
+            tools_used=[_LEAVE_PARSE_TOOL],
+            latency_ms=latency_ms,
+        )
+        raise HTTPException(status_code=failure_status, detail=answer)
+
+    _log_ai_call(
+        db,
+        user_id=current_user.id,
+        question=payload.transcript,
+        answer=draft.model_dump_json(),
+        tools_used=[_LEAVE_PARSE_TOOL],
+        latency_ms=latency_ms,
+    )
+    return draft

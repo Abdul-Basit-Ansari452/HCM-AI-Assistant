@@ -37,7 +37,18 @@
       <h2>Apply for leave</h2>
       <p class="card-subtitle muted">Dates are inclusive.</p>
     </div>
-    <div id="voice-attach"></div>
+    <div id="voice-attach" class="voice-control hidden" data-roles="employee">
+      <button
+        class="btn btn-small"
+        id="voice-button"
+        type="button"
+        aria-describedby="voice-note"
+      >
+        🎤 Speak
+      </button>
+      <p class="voice-note" id="voice-note">AI draft — please review before submitting.</p>
+      <p class="voice-transcript" id="voice-transcript" hidden aria-live="polite"></p>
+    </div>
   </div>
 
   <form class="leave-form" id="leave-form">
