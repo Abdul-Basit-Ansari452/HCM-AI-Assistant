@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     app_name: str = "HRMS"
     database_url: str = "sqlite:///./hrms.db"
     jwt_secret: str = ""
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 12 * 60
     openai_api_key: str = ""
 
 

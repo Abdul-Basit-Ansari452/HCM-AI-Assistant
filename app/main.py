@@ -31,9 +31,9 @@ app = FastAPI(
 
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
-app.include_router(auth.router, prefix="/api")
-app.include_router(employees.router, prefix="/api")
-app.include_router(ai.router, prefix="/api")
+app.include_router(auth.router)
+app.include_router(employees.router)
+app.include_router(ai.router)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["system"])
