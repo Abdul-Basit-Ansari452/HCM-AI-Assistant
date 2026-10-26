@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 12 * 60
     openai_api_key: str = ""
+    # Test-only override for the shared hourly AI quota.
+    rate_limit_override: int | None = None
 
 
 @lru_cache

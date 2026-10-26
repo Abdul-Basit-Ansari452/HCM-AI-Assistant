@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from app.ai.agent import build_agent
 from app.ai.leave_parser import build_leave_messages, build_leave_parser
 from app.ai.prompts import ANSWER_SUFFIX
+from app.config import settings
 from app.deps import DbSession, get_current_user, require_roles
 from app.models import User, UserRole
 from app.schemas import (
@@ -133,6 +134,14 @@ def _friendly_error_message(error: Exception) -> str:
     return "The AI assistant is temporarily unavailable. Please try again."
 
 
+def _hourly_limit() -> int:
+    """Return the effective per-user hourly AI quota."""
+    override = settings.rate_limit_override
+    if override is not None and override > 0:
+        return override
+    return _HOURLY_LIMIT
+
+
 def _enforce_rate_limit(db: Session, user: User) -> None:
     """Raise 429 when the user has used the shared hourly AI quota."""
     cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=1)
@@ -141,10 +150,11 @@ def _enforce_rate_limit(db: Session, user: User) -> None:
         user_id=user.id,
         since=cutoff,
     )
-    if recent_calls >= _HOURLY_LIMIT:
+    limit = _hourly_limit()
+    if recent_calls >= limit:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Hourly AI limit reached (20/hour).",
+            detail=f"Hourly AI limit reached ({limit}/hour).",
         )
 
 

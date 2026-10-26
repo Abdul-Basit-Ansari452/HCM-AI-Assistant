@@ -18,6 +18,7 @@ def build_agent(user: User) -> CompiledStateGraph:
     """Build a fresh role-scoped ReAct agent for one request."""
     model = ChatOpenAI(
         model=MODEL_NAME,
+        temperature=0,
         timeout=15,
         max_retries=1,
         api_key=settings.openai_api_key or None,

@@ -1,6 +1,7 @@
 "use strict";
 
 const TOKEN_KEY = "token";
+const CHAT_ANSWER_SUFFIX = "\u2014 AI-generated answer";
 
 let employeesCache = [];
 let editingEmployeeId = null;
@@ -1250,6 +1251,296 @@ async function initLeavesPage(user) {
   ]);
 }
 
+function initChatWidget(user) {
+  const root = document.getElementById("chat-widget-root");
+  const fab = document.getElementById("chat-widget-fab");
+  const panel = document.getElementById("chat-widget-panel");
+  const closeButton = document.getElementById("chat-widget-close");
+  const messagesElement = document.getElementById("chat-widget-messages");
+  const examplesElement = document.getElementById("chat-widget-examples");
+  const form = document.getElementById("chat-widget-form");
+  const input = document.getElementById("chat-widget-input");
+  const sendButton = document.getElementById("chat-widget-send");
+
+  if (
+    !root ||
+    !fab ||
+    !panel ||
+    !closeButton ||
+    !messagesElement ||
+    !examplesElement ||
+    !form ||
+    !input ||
+    !sendButton
+  ) {
+    return;
+  }
+
+  root.hidden = false;
+
+  const chatHistory = [];
+  const chipButtons = [];
+  let busy = false;
+  let limitReached = false;
+
+  const examples = isAdminOrHr(user)
+    ? [
+        {
+          label: "Headcount",
+          question: "What is the headcount by department?",
+        },
+        {
+          label: "Attendance today",
+          question: "How many employees are present today?",
+        },
+        {
+          label: "Pending leave",
+          question: "How many leave requests are pending?",
+        },
+      ]
+    : [
+        {
+          label: "Leave balance",
+          question: "How many sick leave days do I have left?",
+        },
+        {
+          label: "Work from home policy",
+          question: "What is the work from home policy?",
+        },
+      ];
+
+  examples.forEach((example) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "chat-chip";
+    button.textContent = example.label;
+    button.title = example.question;
+    button.setAttribute("aria-label", example.question);
+    button.addEventListener("click", () => {
+      sendMessage(example.question);
+    });
+    examplesElement.appendChild(button);
+    chipButtons.push(button);
+  });
+
+  function scrollToBottom() {
+    messagesElement.scrollTop = messagesElement.scrollHeight;
+  }
+
+  function addUserMessage(text) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "chat-message chat-message-user";
+
+    const bubble = document.createElement("div");
+    bubble.className = "chat-bubble";
+    bubble.textContent = text;
+
+    wrapper.appendChild(bubble);
+    messagesElement.appendChild(wrapper);
+    chatHistory.push({ role: "user", text });
+    scrollToBottom();
+  }
+
+  function addAssistantMessage(answer, toolsUsed) {
+    const text = String(answer ?? "").trim();
+    const body = text.endsWith(CHAT_ANSWER_SUFFIX)
+      ? text.slice(0, -CHAT_ANSWER_SUFFIX.length).trimEnd()
+      : text;
+    const tools = Array.isArray(toolsUsed)
+      ? toolsUsed.filter((tool) => typeof tool === "string" && tool)
+      : [];
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "chat-message chat-message-assistant";
+
+    const bubble = document.createElement("div");
+    bubble.className = "chat-bubble";
+
+    const answerElement = document.createElement("p");
+    answerElement.className = "chat-answer";
+    answerElement.textContent = body || "No additional details.";
+    bubble.appendChild(answerElement);
+
+    const footer = document.createElement("p");
+    footer.className = "chat-ai-footer";
+    footer.textContent = CHAT_ANSWER_SUFFIX;
+    bubble.appendChild(footer);
+
+    wrapper.appendChild(bubble);
+
+    const badgeRow = document.createElement("div");
+    badgeRow.className = "chat-tools";
+    badgeRow.setAttribute("aria-label", "Tools used");
+
+    if (tools.length === 0) {
+      const badge = document.createElement("span");
+      badge.className = "chat-tool-badge chat-tool-none";
+      badge.textContent = "No tools";
+      badgeRow.appendChild(badge);
+    } else {
+      tools.forEach((tool) => {
+        const badge = document.createElement("span");
+        badge.className = "chat-tool-badge";
+        badge.textContent = labelize(tool);
+        badgeRow.appendChild(badge);
+      });
+    }
+
+    wrapper.appendChild(badgeRow);
+    messagesElement.appendChild(wrapper);
+    chatHistory.push({ role: "assistant", text: body, tools });
+    scrollToBottom();
+  }
+
+  function addErrorMessage(message) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "chat-message chat-message-assistant chat-message-error";
+
+    const bubble = document.createElement("div");
+    bubble.className = "chat-bubble";
+    bubble.textContent = message;
+
+    wrapper.appendChild(bubble);
+    messagesElement.appendChild(wrapper);
+    chatHistory.push({ role: "error", text: message });
+    scrollToBottom();
+  }
+
+  function setInputDisabled(disabled) {
+    input.disabled = disabled;
+    sendButton.disabled = disabled;
+  }
+
+  function showLoading() {
+    const wrapper = document.createElement("div");
+    wrapper.className = "chat-message chat-message-assistant";
+    wrapper.id = "chat-widget-loading";
+
+    const bubble = document.createElement("div");
+    bubble.className = "chat-bubble chat-bubble-loading";
+    bubble.setAttribute("role", "status");
+
+    const spinner = document.createElement("span");
+    spinner.className = "spinner";
+    spinner.setAttribute("aria-hidden", "true");
+
+    const label = document.createElement("span");
+    label.textContent = "Thinking...";
+
+    bubble.append(spinner, label);
+    wrapper.appendChild(bubble);
+    messagesElement.appendChild(wrapper);
+    scrollToBottom();
+  }
+
+  function removeLoading() {
+    const loading = document.getElementById("chat-widget-loading");
+    if (loading) {
+      loading.remove();
+    }
+  }
+
+  function setPanelOpen(open) {
+    panel.hidden = !open;
+    fab.setAttribute("aria-expanded", String(open));
+    fab.setAttribute(
+      "aria-label",
+      open ? "Close AI assistant" : "Open AI assistant",
+    );
+    if (open) {
+      input.focus();
+      scrollToBottom();
+    } else {
+      fab.focus();
+    }
+  }
+
+  async function sendMessage(rawMessage) {
+    const message = String(rawMessage ?? "").trim();
+    if (!message || busy || limitReached) {
+      return;
+    }
+
+    busy = true;
+    addUserMessage(message);
+    input.value = "";
+    input.style.height = "";
+    setInputDisabled(true);
+    showLoading();
+
+    try {
+      const response = await api("/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+      removeLoading();
+      addAssistantMessage(response?.answer ?? "", response?.tools_used ?? []);
+    } catch (error) {
+      removeLoading();
+      if (error instanceof ApiError && error.status === 401) {
+        return;
+      }
+      if (error instanceof ApiError && error.status === 429) {
+        limitReached = true;
+        addErrorMessage(
+          error.message || "Hourly AI limit reached (20/hour).",
+        );
+        setInputDisabled(true);
+        chipButtons.forEach((button) => {
+          button.disabled = true;
+        });
+        input.placeholder = "Hourly AI limit reached";
+        return;
+      }
+      addErrorMessage(
+        "I couldn't get an answer right now. Please try again.",
+      );
+    } finally {
+      removeLoading();
+      busy = false;
+      if (!limitReached) {
+        setInputDisabled(false);
+        if (!panel.hidden) {
+          input.focus();
+        }
+      }
+    }
+  }
+
+  fab.addEventListener("click", () => {
+    setPanelOpen(panel.hidden);
+  });
+
+  closeButton.addEventListener("click", () => {
+    setPanelOpen(false);
+  });
+
+  panel.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      setPanelOpen(false);
+    }
+  });
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    sendMessage(input.value);
+  });
+
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      form.requestSubmit();
+    }
+  });
+
+  input.addEventListener("input", () => {
+    input.style.height = "auto";
+    input.style.height = `${Math.min(input.scrollHeight, 112)}px`;
+  });
+}
+
 async function boot() {
   const page = document.body.dataset.page;
   if (page === "login") {
@@ -1271,6 +1562,7 @@ async function boot() {
   }
 
   initNav(user);
+  initChatWidget(user);
 
   if (page === "dashboard") {
     await initDashboardPage(user);

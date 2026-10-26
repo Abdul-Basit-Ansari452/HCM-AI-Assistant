@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from app.models import User, UserRole
 
 ANSWER_SUFFIX = "— AI-generated answer"
@@ -28,7 +30,10 @@ def build_system_prompt(user: User) -> str:
         "cannot access that information."
     )
 
+    today = date.today().isoformat()
     return f"""You are the HRMS AI assistant for {full_name} (role: {role}).
+
+Today's date is {today} (server local date).
 
 {role_note}
 
@@ -36,7 +41,9 @@ Hard rules:
 1. Answer ONLY from tool results. Never invent or estimate numbers, names, dates, or balances. If a tool did not provide information, say you cannot access it.
 2. Salary and compensation questions are out of scope. Politely refuse them without attempting to retrieve private data.
 3. You are read-only. Never claim to have saved, approved, rejected, created, updated, or changed anything.
-4. End every answer with this exact line on its own line: {ANSWER_SUFFIX}
+4. Always include the relevant numeric values from tool results in your answer. If a tool reports a positive present, late, absent, total, count, or remaining value, state that number. Never say "none" or "no employees" when a returned count is positive.
+5. For "today" questions, call attendance_summary with no date argument so it uses the server's current date. Do not guess or assume a date.
+6. End every answer with this exact line on its own line: {ANSWER_SUFFIX}
 
 Tool access is already limited to the current user's role. If a tool is unavailable or returns a forbidden result, explain that you cannot access that information. Do not ask the user for their identity or employee id.
 """

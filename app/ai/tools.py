@@ -52,7 +52,10 @@ def make_tools_for_user(user: User) -> list[BaseTool]:
 
     @tool
     def attendance_summary(date: str | None = None) -> str:
-        """Get an org-wide attendance summary for an ISO date (YYYY-MM-DD)."""
+        """Get an org-wide attendance summary.
+
+        Omit the date for today's summary. Never guess a date.
+        """
         if role not in _HR_ROLES:
             return _FORBIDDEN
 

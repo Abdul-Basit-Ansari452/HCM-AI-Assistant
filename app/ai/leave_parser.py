@@ -19,6 +19,7 @@ def build_leave_parser() -> Runnable[Any, LeaveDraft]:
     """Build a model that returns a validated leave draft."""
     model = ChatOpenAI(
         model=MODEL_NAME,
+        temperature=0,
         timeout=15,
         max_retries=1,
         api_key=settings.openai_api_key or None,

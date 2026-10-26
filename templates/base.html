@@ -82,7 +82,74 @@
       </main>
     </div>
 
-    <div id="chat-widget-root"></div>
+    <div id="chat-widget-root" hidden>
+      <button
+        class="chat-fab"
+        id="chat-widget-fab"
+        type="button"
+        aria-label="Open AI assistant"
+        aria-controls="chat-widget-panel"
+        aria-expanded="false"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.5H5l-3 2 1.5-4.5A8.5 8.5 0 1 1 21 11.5Z"></path>
+          <path d="M8 11.5h.01M12 11.5h.01M16 11.5h.01"></path>
+        </svg>
+      </button>
+      <section
+        class="chat-panel"
+        id="chat-widget-panel"
+        role="dialog"
+        aria-labelledby="chat-widget-title"
+        hidden
+      >
+        <header class="chat-head">
+          <div class="chat-head-copy">
+            <h2 id="chat-widget-title">HR assistant</h2>
+            <p>Read-only answers from HR data and policies.</p>
+          </div>
+          <button
+            class="chat-close"
+            id="chat-widget-close"
+            type="button"
+            aria-label="Close AI assistant"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6l12 12M18 6 6 18"></path>
+            </svg>
+          </button>
+        </header>
+        <div
+          class="chat-messages"
+          id="chat-widget-messages"
+          aria-live="polite"
+          aria-relevant="additions"
+        ></div>
+        <div
+          class="chat-examples"
+          id="chat-widget-examples"
+          aria-label="Example questions"
+        ></div>
+        <form class="chat-form" id="chat-widget-form">
+          <label class="sr-only" for="chat-widget-input">Ask the HR assistant</label>
+          <textarea
+            id="chat-widget-input"
+            rows="1"
+            maxlength="2000"
+            placeholder="Ask about HR data or policies..."
+            required
+          ></textarea>
+          <button
+            class="btn btn-primary chat-send"
+            id="chat-widget-send"
+            type="submit"
+          >
+            Send
+          </button>
+        </form>
+        <p class="chat-note">Answers are generated from your HR data. Review before acting.</p>
+      </section>
+    </div>
     <script src="{{ url_for('static', path='js/app.js') }}" defer></script>
   </body>
 </html>
