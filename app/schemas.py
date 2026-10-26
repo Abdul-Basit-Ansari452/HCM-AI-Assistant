@@ -8,6 +8,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    field_validator,
     model_validator,
 )
 
@@ -193,3 +194,25 @@ class MyDashboardResponse(BaseModel):
     my_balances: list[LeaveBalanceResponse]
     my_attendance_today: AttendanceResponse | None
     my_pending_requests: list[LeaveResponse]
+
+
+class AIChatRequest(BaseModel):
+    """Payload for the read-only AI assistant."""
+
+    message: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("message")
+    @classmethod
+    def validate_message(cls, value: str) -> str:
+        """Reject whitespace-only questions."""
+        value = value.strip()
+        if not value:
+            raise ValueError("message must not be empty")
+        return value
+
+
+class AIChatResponse(BaseModel):
+    """Answer and the tools actually invoked for it."""
+
+    answer: str
+    tools_used: list[str] = Field(default_factory=list)
