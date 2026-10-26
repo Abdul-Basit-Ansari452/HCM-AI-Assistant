@@ -3,9 +3,15 @@
 from datetime import date, datetime
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    model_validator,
+)
 
-from app.models import AttendanceStatus, UserRole
+from app.models import AttendanceStatus, LeaveStatus, LeaveType, UserRole
 
 
 def _validate_bcrypt_password(value: str) -> str:
@@ -116,3 +122,47 @@ class AttendanceSummaryResponse(BaseModel):
     late: int
     absent: int
     by_department: list[DepartmentAttendanceResponse]
+
+
+class LeaveCreate(BaseModel):
+    """Payload for a self-service leave request."""
+
+    leave_type: LeaveType
+    start_date: date
+    end_date: date
+    reason: str = Field(min_length=1, max_length=1000)
+
+    @model_validator(mode="after")
+    def validate_date_range(self) -> "LeaveCreate":
+        if self.end_date < self.start_date:
+            raise ValueError("end_date must be on or after start_date")
+        return self
+
+
+class LeaveResponse(ORMModel):
+    """Safe public representation of a leave request."""
+
+    id: int
+    employee_id: int
+    leave_type: LeaveType
+    start_date: date
+    end_date: date
+    reason: str
+    status: LeaveStatus
+    created_at: datetime
+
+
+class PendingLeaveResponse(LeaveResponse):
+    """Pending request with employee identity details."""
+
+    employee_name: str
+    department: str
+
+
+class LeaveBalanceResponse(BaseModel):
+    """Per-type leave balance with remaining days."""
+
+    leave_type: LeaveType
+    total_days: int
+    used_days: int
+    remaining: int
