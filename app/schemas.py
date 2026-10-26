@@ -166,3 +166,30 @@ class LeaveBalanceResponse(BaseModel):
     total_days: int
     used_days: int
     remaining: int
+
+
+class DepartmentHeadcountResponse(BaseModel):
+    """Employee count for one department."""
+
+    department: str
+    count: int
+
+
+class DashboardSummaryResponse(BaseModel):
+    """Admin/hr dashboard summary."""
+
+    total_employees: int
+    present_today: int
+    late_today: int
+    absent_today: int
+    on_leave_today: int
+    pending_leave_requests: int
+    headcount_by_department: list[DepartmentHeadcountResponse]
+
+
+class MyDashboardResponse(BaseModel):
+    """Current employee's dashboard."""
+
+    my_balances: list[LeaveBalanceResponse]
+    my_attendance_today: AttendanceResponse | None
+    my_pending_requests: list[LeaveResponse]

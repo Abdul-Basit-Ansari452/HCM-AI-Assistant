@@ -3,7 +3,7 @@
 from datetime import date
 from typing import TypedDict
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
@@ -111,6 +111,18 @@ def list_my_leave_requests(
     return list(db.scalars(statement))
 
 
+def list_my_pending_leave_requests(
+    db: Session,
+    employee_id: int,
+) -> list[LeaveRequest]:
+    """Return an employee's pending requests, newest first."""
+    return [
+        request
+        for request in list_my_leave_requests(db, employee_id)
+        if request.status == LeaveStatus.PENDING
+    ]
+
+
 def get_leave_balance(employee_id: int) -> list[LeaveBalanceInfo]:
     """Return per-type balances with remaining days.
 
@@ -144,6 +156,30 @@ def list_pending_leave_requests(
         .order_by(LeaveRequest.created_at.desc(), LeaveRequest.id.desc())
     ).all()
     return [(request, employee) for request, employee in rows]
+
+
+def count_pending_leave_requests() -> int:
+    """Count pending requests via the same service used by /leaves/pending."""
+    with SessionLocal() as db:
+        return len(list_pending_leave_requests(db))
+
+
+def count_on_leave(on_date: date) -> int:
+    """Count distinct employees with approved leave covering a date.
+
+    Read-only and self-contained so the AI layer can call it as a tool.
+    """
+    with SessionLocal() as db:
+        return (
+            db.scalar(
+                select(func.count(func.distinct(LeaveRequest.employee_id))).where(
+                    LeaveRequest.status == LeaveStatus.APPROVED,
+                    LeaveRequest.start_date <= on_date,
+                    LeaveRequest.end_date >= on_date,
+                )
+            )
+            or 0
+        )
 
 
 def approve_leave_request(db: Session, leave_id: int) -> LeaveRequest:

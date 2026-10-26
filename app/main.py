@@ -10,7 +10,14 @@ from fastapi.staticfiles import StaticFiles
 import app.models  # noqa: F401  (register models before create_all)
 from app.config import settings
 from app.database import Base, engine
-from app.routers import ai, attendance, auth, employees, leaves
+from app.routers import (
+    ai,
+    attendance,
+    auth,
+    dashboard,
+    employees,
+    leaves,
+)
 from app.schemas import HealthResponse
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -35,6 +42,7 @@ app.include_router(auth.router)
 app.include_router(employees.router)
 app.include_router(attendance.router)
 app.include_router(leaves.router)
+app.include_router(dashboard.router)
 app.include_router(ai.router)
 
 

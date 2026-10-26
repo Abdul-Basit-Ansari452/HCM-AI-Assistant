@@ -118,6 +118,15 @@ def list_my_attendance(
     return list(db.scalars(statement))
 
 
+def get_my_attendance_today(
+    db: Session,
+    employee_id: int,
+) -> Attendance | None:
+    """Return today's attendance row, or None when absent."""
+    rows = list_my_attendance(db, employee_id, days=1)
+    return rows[0] if rows else None
+
+
 def attendance_summary(date: Date) -> AttendanceSummary:
     """Summarize attendance for a date using server-local calendar dates.
 
