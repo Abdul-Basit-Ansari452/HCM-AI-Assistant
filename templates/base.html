@@ -6,10 +6,28 @@
     <title>{% block title %}HRMS{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
   </head>
-  <body>
+  <body data-page="{% block page_id %}{% endblock %}">
+    {% block nav %}
+    <header class="topnav" id="topnav" hidden>
+      <a class="brand" href="/dashboard">HRMS</a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="/dashboard" data-nav="dashboard">Dashboard</a>
+        <a href="/employees" data-nav="employees" data-roles="admin,hr">Employees</a>
+        <a href="/attendance" data-nav="attendance">Attendance</a>
+        <a href="/leaves" data-nav="leaves">Leave</a>
+      </nav>
+      <div class="nav-user">
+        <span class="nav-user-label" id="nav-user-label"></span>
+        <button class="btn btn-ghost" id="logout-button" type="button">Logout</button>
+      </div>
+    </header>
+    {% endblock %}
+
     <main class="container">
       {% block content %}{% endblock %}
     </main>
+
+    <div id="chat-widget-root"></div>
     <script src="{{ url_for('static', path='js/app.js') }}" defer></script>
   </body>
 </html>

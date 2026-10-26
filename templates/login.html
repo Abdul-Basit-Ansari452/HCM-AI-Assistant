@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Sign in · HRMS{% endblock %}
+{% block page_id %}login{% endblock %}
+{% block nav %}{% endblock %}
+
+{% block content %}
+<section class="login-shell">
+  <form class="card login-card" id="login-form">
+    <p class="brand brand-large">HRMS</p>
+    <h1>Sign in</h1>
+    <p class="muted">Use your employee account to continue.</p>
+
+    <label for="username">Email</label>
+    <input
+      id="username"
+      name="username"
+      type="email"
+      autocomplete="username"
+      required
+      autofocus
+    >
+
+    <label for="password">Password</label>
+    <input
+      id="password"
+      name="password"
+      type="password"
+      autocomplete="current-password"
+      required
+    >
+
+    <button class="btn btn-primary btn-block" id="login-button" type="submit">
+      Sign in
+    </button>
+  </form>
+</section>
+{% endblock %}
