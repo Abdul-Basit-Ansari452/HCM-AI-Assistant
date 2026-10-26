@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Attendance · HRMS{% endblock %}
+{% block page_id %}attendance{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Attendance</h1>
+    <p class="muted">Check in, check out, and review the last 30 days.</p>
+  </div>
+</div>
+
+<section class="card">
+  <div class="card-head">
+    <h2>Today</h2>
+    <span class="muted" id="attendance-date"></span>
+  </div>
+  <div class="attendance-card" id="attendance-card">
+    <div class="loading-state">
+      <span class="spinner" aria-hidden="true"></span>
+      Loading…
+    </div>
+  </div>
+  <div class="action-row">
+    <button class="btn btn-primary" id="check-in-button" type="button" hidden>
+      Check in
+    </button>
+    <button class="btn" id="check-out-button" type="button" hidden>
+      Check out
+    </button>
+  </div>
+</section>
+
+<section class="card table-card">
+  <div class="card-head">
+    <h2>Last 30 days</h2>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Status</th>
+          <th>Check in</th>
+          <th>Check out</th>
+        </tr>
+      </thead>
+      <tbody id="attendance-history-body">
+        <tr>
+          <td class="empty loading" colspan="4">
+            <span class="loading-state">
+              <span class="spinner" aria-hidden="true"></span>
+              Loading…
+            </span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

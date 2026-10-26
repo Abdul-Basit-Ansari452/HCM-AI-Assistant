@@ -7,28 +7,39 @@
 {% block content %}
 <section class="login-shell">
   <form class="card login-card" id="login-form">
-    <p class="brand brand-large">HRMS</p>
-    <h1>Sign in</h1>
-    <p class="muted">Use your employee account to continue.</p>
+    <div class="login-brand">
+      <span class="brand-mark brand-mark-large" aria-hidden="true">H</span>
+      <span class="brand-copy">
+        <span class="brand-name">HRMS</span>
+        <span class="brand-caption">People operations</span>
+      </span>
+    </div>
 
-    <label for="username">Email</label>
-    <input
-      id="username"
-      name="username"
-      type="email"
-      autocomplete="username"
-      required
-      autofocus
-    >
+    <h1>Welcome back</h1>
+    <p class="login-subtitle">Sign in to manage your team and leave.</p>
 
-    <label for="password">Password</label>
-    <input
-      id="password"
-      name="password"
-      type="password"
-      autocomplete="current-password"
-      required
-    >
+    <div class="form-field">
+      <label for="username">Email</label>
+      <input
+        id="username"
+        name="username"
+        type="email"
+        autocomplete="username"
+        required
+        autofocus
+      >
+    </div>
+
+    <div class="form-field">
+      <label for="password">Password</label>
+      <input
+        id="password"
+        name="password"
+        type="password"
+        autocomplete="current-password"
+        required
+      >
+    </div>
 
     <button class="btn btn-primary btn-block" id="login-button" type="submit">
       Sign in

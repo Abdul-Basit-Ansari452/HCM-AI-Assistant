@@ -4,28 +4,83 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}HRMS{% endblock %}</title>
+    <link rel="icon" href="data:,">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    >
     <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
   </head>
   <body data-page="{% block page_id %}{% endblock %}">
-    {% block nav %}
-    <header class="topnav" id="topnav" hidden>
-      <a class="brand" href="/dashboard">HRMS</a>
-      <nav class="nav-links" aria-label="Primary">
-        <a href="/dashboard" data-nav="dashboard">Dashboard</a>
-        <a href="/employees" data-nav="employees" data-roles="admin,hr">Employees</a>
-        <a href="/attendance" data-nav="attendance">Attendance</a>
-        <a href="/leaves" data-nav="leaves">Leave</a>
-      </nav>
-      <div class="nav-user">
-        <span class="nav-user-label" id="nav-user-label"></span>
-        <button class="btn btn-ghost" id="logout-button" type="button">Logout</button>
-      </div>
-    </header>
-    {% endblock %}
+    <div class="app-layout">
+      {% block nav %}
+      <input class="nav-toggle" type="checkbox" id="nav-toggle" aria-label="Toggle navigation">
+      <label class="nav-toggle-button" for="nav-toggle" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </label>
+      <label class="nav-scrim" for="nav-toggle" aria-hidden="true"></label>
+      <aside class="sidebar" id="topnav" hidden>
+        <a class="brand" href="/dashboard">
+          <span class="brand-mark" aria-hidden="true">H</span>
+          <span class="brand-copy">
+            <span class="brand-name">HRMS</span>
+            <span class="brand-caption">People operations</span>
+          </span>
+        </a>
+        <nav class="nav-links" aria-label="Primary">
+          <a href="/dashboard" data-nav="dashboard">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
+              <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
+              <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
+              <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
+            </svg>
+            <span>Dashboard</span>
+          </a>
+          <a href="/employees" data-nav="employees" data-roles="admin,hr">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="9" cy="8" r="3"></circle>
+              <path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"></path>
+              <path d="M16 5.5a3 3 0 0 1 0 5.8"></path>
+              <path d="M17.5 14c2.2.4 3.5 2 3.5 4.5"></path>
+            </svg>
+            <span>Employees</span>
+          </a>
+          <a href="/attendance" data-nav="attendance">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="9"></circle>
+              <path d="M12 7v5l3 2"></path>
+            </svg>
+            <span>Attendance</span>
+          </a>
+          <a href="/leave" data-nav="leaves">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3.5" y="5" width="17" height="15" rx="2"></rect>
+              <path d="M8 3v4M16 3v4M3.5 10h17"></path>
+            </svg>
+            <span>Leave</span>
+          </a>
+        </nav>
+        <div class="nav-user">
+          <span class="nav-user-caption">Signed in as</span>
+          <span class="nav-user-label" id="nav-user-label"></span>
+          <button class="btn btn-ghost" id="logout-button" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M10 4H5.5A1.5 1.5 0 0 0 4 5.5v13A1.5 1.5 0 0 0 5.5 20H10"></path>
+              <path d="M14 8l4 4-4 4M9 12h9"></path>
+            </svg>
+            <span>Logout</span>
+          </button>
+        </div>
+      </aside>
+      {% endblock %}
 
-    <main class="container">
-      {% block content %}{% endblock %}
-    </main>
+      <main class="container">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
 
     <div id="chat-widget-root"></div>
     <script src="{{ url_for('static', path='js/app.js') }}" defer></script>

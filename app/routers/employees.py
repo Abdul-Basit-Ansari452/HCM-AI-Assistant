@@ -2,13 +2,15 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import HTMLResponse
 
-from app.deps import DbSession, get_current_user, require_roles
+from app.deps import DbSession, get_current_user, get_optional_user, require_roles
 from app.models import Employee, User, UserRole
 from app.schemas import EmployeeCreate, EmployeeResponse, EmployeeUpdate
 from app.services import employees as employee_service
 from app.services.employees import DuplicateEmailError
+from app.templating import templates
 
 router = APIRouter(prefix="/employees", tags=["employees"])
 
@@ -16,6 +18,32 @@ AdminOrHr = Annotated[
     User,
     Depends(require_roles(UserRole.ADMIN, UserRole.HR)),
 ]
+
+
+def _wants_html(request: Request) -> bool:
+    """Return True for normal browser navigation requests."""
+    return "text/html" in request.headers.get("accept", "")
+
+
+def employees_list_access(
+    request: Request,
+    current_user: Annotated[User | None, Depends(get_optional_user)],
+) -> User | None:
+    """Allow the HTML page shell for any visitor; require admin/hr for JSON."""
+    if _wants_html(request):
+        return current_user
+    if current_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if current_user.role not in (UserRole.ADMIN, UserRole.HR):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions",
+        )
+    return current_user
 
 
 def get_employee_for_user(
@@ -44,11 +72,15 @@ def get_employee_for_user(
 
 @router.get("", response_model=list[EmployeeResponse])
 def list_employees(
+    request: Request,
     db: DbSession,
-    _current_user: AdminOrHr,
+    _current_user: Annotated[User | None, Depends(employees_list_access)],
     department: str | None = None,
-) -> list[EmployeeResponse]:
-    """List employees with an optional department filter."""
+) -> list[EmployeeResponse] | HTMLResponse:
+    """Serve the employees page to browsers, or JSON to API clients."""
+    if _wants_html(request):
+        return templates.TemplateResponse(request=request, name="employees.html")
+
     employees = employee_service.list_employees(db, department)
     return [EmployeeResponse.model_validate(employee) for employee in employees]
 

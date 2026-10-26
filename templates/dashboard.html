@@ -12,14 +12,35 @@
     </div>
   </div>
 
-  <div class="stat-grid" id="admin-stats" aria-live="polite"></div>
+  <div class="stat-grid" id="admin-stats" aria-live="polite">
+    <div class="stat-card skeleton-card" aria-hidden="true">
+      <span class="skeleton-line skeleton-line-lg"></span>
+      <span class="skeleton-line skeleton-line-sm"></span>
+    </div>
+    <div class="stat-card skeleton-card" aria-hidden="true">
+      <span class="skeleton-line skeleton-line-lg"></span>
+      <span class="skeleton-line skeleton-line-sm"></span>
+    </div>
+    <div class="stat-card skeleton-card" aria-hidden="true">
+      <span class="skeleton-line skeleton-line-lg"></span>
+      <span class="skeleton-line skeleton-line-sm"></span>
+    </div>
+    <div class="stat-card skeleton-card" aria-hidden="true">
+      <span class="skeleton-line skeleton-line-lg"></span>
+      <span class="skeleton-line skeleton-line-sm"></span>
+    </div>
+    <div class="stat-card skeleton-card" aria-hidden="true">
+      <span class="skeleton-line skeleton-line-lg"></span>
+      <span class="skeleton-line skeleton-line-sm"></span>
+    </div>
+  </div>
 
-  <section class="card">
+  <section class="card table-card headcount-card">
     <div class="card-head">
       <h2>Headcount by department</h2>
     </div>
     <div class="table-wrap">
-      <table>
+      <table class="headcount-table">
         <thead>
           <tr>
             <th>Department</th>
@@ -27,7 +48,14 @@
           </tr>
         </thead>
         <tbody id="headcount-body">
-          <tr><td class="empty" colspan="2">Loading…</td></tr>
+          <tr>
+            <td class="empty loading" colspan="2">
+              <span class="loading-state">
+                <span class="spinner" aria-hidden="true"></span>
+                Loading…
+              </span>
+            </td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -47,7 +75,10 @@
       <h2>Today's attendance</h2>
     </div>
     <div class="attendance-card" id="attendance-card">
-      <p class="empty">Loading…</p>
+      <div class="loading-state">
+        <span class="spinner" aria-hidden="true"></span>
+        Loading…
+      </div>
     </div>
     <div class="action-row">
       <button class="btn btn-primary" id="check-in-button" type="button" hidden>
@@ -63,10 +94,23 @@
     <div class="section-head">
       <h2>Leave balances</h2>
     </div>
-    <div class="stat-grid" id="balance-cards" aria-live="polite"></div>
+    <div class="stat-grid" id="balance-cards" aria-live="polite">
+      <div class="stat-card skeleton-card" aria-hidden="true">
+        <span class="skeleton-line skeleton-line-lg"></span>
+        <span class="skeleton-line skeleton-line-sm"></span>
+      </div>
+      <div class="stat-card skeleton-card" aria-hidden="true">
+        <span class="skeleton-line skeleton-line-lg"></span>
+        <span class="skeleton-line skeleton-line-sm"></span>
+      </div>
+      <div class="stat-card skeleton-card" aria-hidden="true">
+        <span class="skeleton-line skeleton-line-lg"></span>
+        <span class="skeleton-line skeleton-line-sm"></span>
+      </div>
+    </div>
   </section>
 
-  <section class="card">
+  <section class="card table-card">
     <div class="card-head">
       <h2>My pending requests</h2>
     </div>
@@ -81,7 +125,14 @@
           </tr>
         </thead>
         <tbody id="pending-requests-body">
-          <tr><td class="empty" colspan="4">Loading…</td></tr>
+          <tr>
+            <td class="empty loading" colspan="4">
+              <span class="loading-state">
+                <span class="spinner" aria-hidden="true"></span>
+                Loading…
+              </span>
+            </td>
+          </tr>
         </tbody>
       </table>
     </div>

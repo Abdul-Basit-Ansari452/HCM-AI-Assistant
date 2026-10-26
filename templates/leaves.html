@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block title %}Leave · HRMS{% endblock %}
+{% block page_id %}leaves{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Leave</h1>
+    <p class="muted">Apply for leave and track your requests.</p>
+  </div>
+</div>
+
+<section>
+  <div class="section-head">
+    <h2>Balances</h2>
+  </div>
+  <div class="stat-grid" id="leave-balance-cards" aria-live="polite">
+    <div class="stat-card skeleton-card" aria-hidden="true">
+      <span class="skeleton-line skeleton-line-lg"></span>
+      <span class="skeleton-line skeleton-line-sm"></span>
+    </div>
+    <div class="stat-card skeleton-card" aria-hidden="true">
+      <span class="skeleton-line skeleton-line-lg"></span>
+      <span class="skeleton-line skeleton-line-sm"></span>
+    </div>
+    <div class="stat-card skeleton-card" aria-hidden="true">
+      <span class="skeleton-line skeleton-line-lg"></span>
+      <span class="skeleton-line skeleton-line-sm"></span>
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <div>
+      <h2>Apply for leave</h2>
+      <p class="card-subtitle muted">Dates are inclusive.</p>
+    </div>
+    <div id="voice-attach"></div>
+  </div>
+
+  <form class="leave-form" id="leave-form">
+    <div class="form-grid three-columns">
+      <div class="form-field">
+        <label for="leave-type">Leave type</label>
+        <select id="leave-type" name="leave_type" required>
+          <option value="sick">Sick</option>
+          <option value="casual">Casual</option>
+          <option value="earned">Earned</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label for="leave-start">Start date</label>
+        <input id="leave-start" name="start_date" type="date" required>
+      </div>
+      <div class="form-field">
+        <label for="leave-end">End date</label>
+        <input id="leave-end" name="end_date" type="date" required>
+      </div>
+      <div class="form-field form-field-wide">
+        <label for="leave-reason">Reason</label>
+        <textarea id="leave-reason" name="reason" maxlength="1000" rows="3" required></textarea>
+      </div>
+    </div>
+
+    <div class="form-error" id="leave-date-error" hidden>
+      End date must be on or after start date.
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-primary" id="leave-submit" type="submit">
+        Submit request
+      </button>
+    </div>
+  </form>
+</section>
+
+<section class="card table-card">
+  <div class="card-head">
+    <h2>My requests</h2>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Dates</th>
+          <th class="numeric">Days</th>
+          <th>Reason</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="my-leaves-body">
+        <tr>
+          <td class="empty loading" colspan="5">
+            <span class="loading-state">
+              <span class="spinner" aria-hidden="true"></span>
+              Loading…
+            </span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card table-card hidden" id="pending-approvals-section" data-roles="admin,hr">
+  <div class="card-head">
+    <h2>Pending Approvals</h2>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Type</th>
+          <th>Dates</th>
+          <th class="numeric">Days</th>
+          <th>Reason</th>
+          <th class="numeric">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="pending-leaves-body">
+        <tr>
+          <td class="empty loading" colspan="6">
+            <span class="loading-state">
+              <span class="spinner" aria-hidden="true"></span>
+              Loading…
+            </span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -17,16 +17,17 @@ from app.models import User, UserRole
 from app.security import decode_access_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+optional_oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl="/auth/login",
+    auto_error=False,
+)
 
 DbSession = Annotated[Session, Depends(get_db)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
-def get_current_user(
-    token: Annotated[str, Depends(oauth2_scheme)],
-    db: DbSession,
-) -> User:
-    """Resolve the bearer token to an active user."""
+def _resolve_user(token: str, db: Session) -> User:
+    """Resolve a bearer token to an active user or raise 401."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -55,6 +56,27 @@ def get_current_user(
         raise credentials_exception
 
     return user
+
+
+def get_current_user(
+    token: Annotated[str, Depends(oauth2_scheme)],
+    db: DbSession,
+) -> User:
+    """Resolve the bearer token to an active user."""
+    return _resolve_user(token, db)
+
+
+def get_optional_user(
+    token: Annotated[str | None, Depends(optional_oauth2_scheme)],
+    db: DbSession,
+) -> User | None:
+    """Resolve a bearer token when present; invalid or missing tokens yield None."""
+    if not token:
+        return None
+    try:
+        return _resolve_user(token, db)
+    except HTTPException:
+        return None
 
 
 def require_roles(*roles: UserRole) -> Callable[..., User]:

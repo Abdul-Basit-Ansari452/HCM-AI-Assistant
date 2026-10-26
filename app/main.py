@@ -2,12 +2,10 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 
 import app.models  # noqa: F401  (register models before create_all)
 from app.config import settings
@@ -21,9 +19,7 @@ from app.routers import (
     leaves,
 )
 from app.schemas import HealthResponse
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-templates = Jinja2Templates(directory=BASE_DIR / "templates")
+from app.templating import BASE_DIR, templates
 
 
 @asynccontextmanager
@@ -65,6 +61,18 @@ def login_page(request: Request) -> HTMLResponse:
 def dashboard_page(request: Request) -> HTMLResponse:
     """Serve the dashboard shell; JavaScript chooses the role-specific view."""
     return templates.TemplateResponse(request=request, name="dashboard.html")
+
+
+@app.get("/attendance", response_class=HTMLResponse, include_in_schema=False)
+def attendance_page(request: Request) -> HTMLResponse:
+    """Serve the attendance shell."""
+    return templates.TemplateResponse(request=request, name="attendance.html")
+
+
+@app.get("/leave", response_class=HTMLResponse, include_in_schema=False)
+def leave_page(request: Request) -> HTMLResponse:
+    """Serve the leave shell."""
+    return templates.TemplateResponse(request=request, name="leaves.html")
 
 
 @app.get("/health", response_model=HealthResponse, tags=["system"])
