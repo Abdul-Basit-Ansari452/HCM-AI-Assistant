@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 import app.models  # noqa: F401  (register models before create_all)
 from app.config import settings
 from app.database import Base, engine
-from app.routers import ai, auth, employees
+from app.routers import ai, attendance, auth, employees
 from app.schemas import HealthResponse
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -33,6 +33,7 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
 app.include_router(auth.router)
 app.include_router(employees.router)
+app.include_router(attendance.router)
 app.include_router(ai.router)
 
 

@@ -1,11 +1,11 @@
 """Pydantic v2 schemas shared across routes."""
 
-from datetime import date
+from datetime import date, datetime
 from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
-from app.models import UserRole
+from app.models import AttendanceStatus, UserRole
 
 
 def _validate_bcrypt_password(value: str) -> str:
@@ -87,3 +87,32 @@ class EmployeeResponse(ORMModel):
     department: str
     designation: str
     join_date: date
+
+
+class AttendanceResponse(ORMModel):
+    """One attendance row."""
+
+    id: int
+    employee_id: int
+    date: date
+    check_in: datetime | None
+    check_out: datetime | None
+    status: AttendanceStatus
+
+
+class DepartmentAttendanceResponse(BaseModel):
+    """Present count for one department."""
+
+    department: str
+    present: int
+    total: int
+
+
+class AttendanceSummaryResponse(BaseModel):
+    """Daily attendance summary."""
+
+    date: date
+    present: int
+    late: int
+    absent: int
+    by_department: list[DepartmentAttendanceResponse]
