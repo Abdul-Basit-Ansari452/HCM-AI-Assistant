@@ -1,17 +1,19 @@
 """Authentication routes."""
 
-from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 
 from app.deps import DbSession, get_current_user, require_roles
-from app.models import Employee, User, UserRole
+from app.models import User, UserRole
 from app.schemas import RegisterRequest, TokenResponse, UserResponse
-from app.security import create_access_token, hash_password, verify_password
+from app.security import create_access_token, verify_password
+from app.services.employees import (
+    DuplicateEmailError,
+    create_employee_with_user,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -48,40 +50,22 @@ def register(
     _admin: Annotated[User, Depends(require_roles(UserRole.ADMIN))],
 ) -> UserResponse:
     """Create an employee and linked user. Admin only."""
-    email = payload.email.strip().lower()
-    if db.scalar(select(User.id).where(User.email == email)) is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Email already registered",
-        )
-
-    employee = Employee(
-        full_name=payload.full_name.strip(),
-        email=email,
-        department=payload.department.strip(),
-        designation=payload.designation.strip(),
-        join_date=date.today(),
-    )
-    db.add(employee)
-
     try:
-        db.flush()
-        user = User(
-            email=email,
-            password_hash=hash_password(payload.password),
+        _employee, user = create_employee_with_user(
+            db,
+            email=payload.email,
+            password=payload.password,
+            full_name=payload.full_name,
+            department=payload.department,
+            designation=payload.designation,
             role=payload.role,
-            employee_id=employee.id,
         )
-        db.add(user)
-        db.commit()
-    except IntegrityError:
-        db.rollback()
+    except DuplicateEmailError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Email already registered",
         ) from None
 
-    db.refresh(user)
     return UserResponse.model_validate(user)
 
 
